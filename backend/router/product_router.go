@@ -1,0 +1,28 @@
+package router
+
+import (
+	"backend/config"
+	"backend/handler"
+	"backend/helper"
+	"backend/middleware"
+	"backend/repository"
+	"backend/service"
+
+	"github.com/gin-gonic/gin"
+)
+
+func ProductRouter(api *gin.RouterGroup) {
+	ProductRepository := repository.NewProductRepository(config.DB)
+	ProductService := service.NewProductService(ProductRepository, config.MinioClient, config.RedisClient, "product-bucket")
+	ProductHandler := handler.NewProductHandler(ProductService)
+
+	Product := api.Group("/product")
+
+	Product.Use(middleware.JWTMiddleware())
+
+	Product.POST("", middleware.RoleMiddleware(helper.Admin()), ProductHandler.Create)
+	Product.GET("", ProductHandler.GetAll)
+	Product.GET("/:id", ProductHandler.GetByID)
+	Product.PUT("/:id", middleware.RoleMiddleware(helper.Admin()), ProductHandler.Update)
+	Product.DELETE("/:id", middleware.RoleMiddleware(helper.Admin()), ProductHandler.Delete)
+}

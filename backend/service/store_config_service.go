@@ -5,8 +5,12 @@ import (
 	"backend/entity"
 	"backend/errorhandler"
 	"backend/repository"
+	"context"
+	"encoding/json"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 )
 
 type StoreConfigService interface {
@@ -16,10 +20,14 @@ type StoreConfigService interface {
 
 type storeConfigService struct {
 	repository repository.StoreConfigRepository
+	redis      *redis.Client
 }
 
-func NewStoreConfigService(repository repository.StoreConfigRepository) *storeConfigService {
-	return &storeConfigService{repository: repository}
+func NewStoreConfigService(repository repository.StoreConfigRepository, redis *redis.Client) *storeConfigService {
+	return &storeConfigService{
+		repository: repository,
+		redis:      redis,
+	}
 }
 
 func (s *storeConfigService) Upsert(req *dto.StoreConfigRequest) error {
@@ -52,10 +60,24 @@ func (s *storeConfigService) Upsert(req *dto.StoreConfigRequest) error {
 		existing.CityID = req.CityID
 	}
 
+	ctx := context.Background()
+	cacheKey := "config"
+	s.redis.Del(ctx, cacheKey)
+
 	return s.repository.UpdateConfig(existing)
 }
 
 func (s *storeConfigService) GetConfig() (*dto.StoreConfigResponse, error) {
+	ctx := context.Background()
+	cacheKey := "config"
+
+	cached, err := s.redis.Get(ctx, cacheKey).Result()
+	if err == nil {
+		var response dto.StoreConfigResponse
+		json.Unmarshal([]byte(cached), &response)
+		return &response, nil
+	}
+
 	config, err := s.repository.GetConfig()
 	if err != nil {
 		return nil, &errorhandler.InternalServerError{Message: err.Error()}
@@ -64,6 +86,9 @@ func (s *storeConfigService) GetConfig() (*dto.StoreConfigResponse, error) {
 	if config == nil {
 		return nil, &errorhandler.NotFoundError{Message: "store config belum diatur"}
 	}
+
+	jsonData, _ := json.Marshal(config)
+	s.redis.Set(ctx, cacheKey, jsonData, 24*time.Hour)
 
 	return &dto.StoreConfigResponse{
 		ConfigID: config.ConfigID,

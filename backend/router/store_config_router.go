@@ -13,10 +13,10 @@ import (
 
 func StoreConfigRouter(api *gin.RouterGroup) {
 	StoreConfigRepository := repository.NewStoreConfigRepository(config.DB)
-	StoreConfigService := service.NewStoreConfigService(StoreConfigRepository)
+	StoreConfigService := service.NewStoreConfigService(StoreConfigRepository, config.RedisClient)
 	StoreConfigHandler := handler.NewStoreConfigHandler(StoreConfigService)
 
-	StoreConfig := api.Group("/StoreConfig")
+	StoreConfig := api.Group("/storeConfig")
 
 	StoreConfig.Use(middleware.JWTMiddleware())
 

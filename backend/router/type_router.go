@@ -16,7 +16,7 @@ func TypeRouter(api *gin.RouterGroup) {
 	TypeService := service.NewTypeService(TypeRepository, config.RedisClient)
 	TypeHandler := handler.NewTypeHandler(TypeService)
 
-	Type := api.Group("/Type")
+	Type := api.Group("/type")
 
 	Type.Use(middleware.JWTMiddleware())
 

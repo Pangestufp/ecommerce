@@ -87,6 +87,10 @@ func (s *typeService) DeleteType(typeID string) error {
 		return &errorhandler.NotFoundError{Message: "type not found"}
 	}
 
+	ctx := context.Background()
+	cacheKey := fmt.Sprintf("type:%s", typeID)
+	s.redis.Del(ctx, cacheKey)
+
 	return s.repository.DeleteType(typeID)
 }
 
@@ -117,7 +121,7 @@ func (s *typeService) GetAllType() ([]dto.TypeResponse, error) {
 	}
 
 	jsonData, _ := json.Marshal(responses)
-	s.redis.Set(ctx, cacheKey, jsonData, 5*time.Minute)
+	s.redis.Set(ctx, cacheKey, jsonData, 15*time.Minute)
 
 	return responses, nil
 }
@@ -146,7 +150,7 @@ func (s *typeService) GetTypeByID(typeID string) (*dto.TypeResponse, error) {
 	}
 
 	jsonData, _ := json.Marshal(response)
-	s.redis.Set(ctx, cacheKey, jsonData, 5*time.Minute)
+	s.redis.Set(ctx, cacheKey, jsonData, 15*time.Minute)
 
 	return &response, nil
 }

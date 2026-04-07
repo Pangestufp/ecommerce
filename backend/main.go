@@ -32,6 +32,7 @@ func main() {
 	router.AuthRouter(api)
 	router.StoreConfigRouter(api)
 	router.TypeRouter(api)
+	router.ProductRouter(api)
 
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%v", config.ENV.Port),
