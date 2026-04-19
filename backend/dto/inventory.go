@@ -4,7 +4,6 @@ import "time"
 
 type CreateInventoryRequest struct {
 	ProductID string  `json:"product_id" binding:"required"`
-	BatchCode string  `json:"batch_code" binding:"required"`
 	CostPrice float64 `json:"cost_price" binding:"required"`
 	Stock     int     `json:"stock" binding:"required"`
 }

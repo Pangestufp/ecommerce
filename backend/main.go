@@ -33,6 +33,9 @@ func main() {
 	router.StoreConfigRouter(api)
 	router.TypeRouter(api)
 	router.ProductRouter(api)
+	router.ProductPriceRouter(api)
+	router.DiscountRouter(api)
+	router.InventoryRouter(api)
 
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%v", config.ENV.Port),

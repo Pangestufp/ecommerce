@@ -19,6 +19,7 @@ type TypeService interface {
 	CreateType(req *dto.TypeRequest) (*dto.TypeResponse, error)
 	UpdateType(typeID string, req *dto.TypeRequest) (*dto.TypeResponse, error)
 	DeleteType(typeID string) error
+	GetAllTypePaginate(cursor *dto.Paginate, limit int) ([]dto.TypeResponse, *dto.Paginate, error)
 	GetAllType() ([]dto.TypeResponse, error)
 	GetTypeByID(typeID string) (*dto.TypeResponse, error)
 }
@@ -33,14 +34,31 @@ func NewTypeService(repository repository.TypeRepository, redis *redis.Client) *
 }
 
 func (s *typeService) CreateType(req *dto.TypeRequest) (*dto.TypeResponse, error) {
+
+	if req.TypeCode == "" {
+		return nil, &errorhandler.ForbiddenError{Message: "Type Code kosong"}
+	}
+
+	if req.TypeName == "" {
+		return nil, &errorhandler.ForbiddenError{Message: "Type Name kosong"}
+	}
+
+	if req.TypeDesc == "" {
+		return nil, &errorhandler.ForbiddenError{Message: "Type Description kosong"}
+	}
 	t := entity.Type{
 		TypeID:    uuid.New().String(),
-		TypeCode:  req.TypeCode,
+		TypeCode:  helper.UpperAndTrim(req.TypeCode),
 		TypeName:  req.TypeName,
 		TypeDesc:  req.TypeDesc,
 		CreatedAt: helper.TimeNowWIB(),
 		UpdatedAt: helper.TimeNowWIB(),
 		Status:    1,
+	}
+
+	data, err := s.repository.GetTypeByTypeCode(helper.UpperAndTrim(req.TypeCode))
+	if err == nil && data != nil {
+		return nil, &errorhandler.ForbiddenError{Message: "Type Code Telah digunakan"}
 	}
 
 	if err := s.repository.CreateType(&t); err != nil {
@@ -54,16 +72,43 @@ func (s *typeService) CreateType(req *dto.TypeRequest) (*dto.TypeResponse, error
 		TypeDesc: t.TypeDesc,
 	}
 
+	ctx := context.Background()
+
+	cacheKey := "type:firstpage"
+	s.redis.Del(ctx, cacheKey)
+
+	cacheKey = "type:all"
+	s.redis.Del(ctx, cacheKey)
+
 	return &response, nil
 }
 
 func (s *typeService) UpdateType(typeID string, req *dto.TypeRequest) (*dto.TypeResponse, error) {
+	if req.TypeCode == "" {
+		return nil, &errorhandler.ForbiddenError{Message: "Type Code kosong"}
+	}
+
+	if req.TypeName == "" {
+		return nil, &errorhandler.ForbiddenError{Message: "Type Name kosong"}
+	}
+
+	if req.TypeDesc == "" {
+		return nil, &errorhandler.ForbiddenError{Message: "Type Description kosong"}
+	}
+
 	t, err := s.repository.GetTypeByID(typeID)
 	if err != nil {
 		return nil, &errorhandler.NotFoundError{Message: "Type Not Found"}
 	}
 
-	t.TypeCode = req.TypeCode
+	if helper.UpperAndTrim(req.TypeCode) != helper.UpperAndTrim(t.TypeCode) {
+		existing, _ := s.repository.GetTypeByTypeCode(helper.UpperAndTrim(req.TypeCode))
+		if existing != nil {
+			return nil, &errorhandler.ForbiddenError{Message: "Type Code Telah digunakan"}
+		}
+	}
+
+	t.TypeCode = helper.UpperAndTrim(req.TypeCode)
 	t.TypeName = req.TypeName
 	t.TypeDesc = req.TypeDesc
 	t.UpdatedAt = helper.TimeNowWIB()
@@ -74,6 +119,12 @@ func (s *typeService) UpdateType(typeID string, req *dto.TypeRequest) (*dto.Type
 
 	ctx := context.Background()
 	cacheKey := fmt.Sprintf("type:%s", typeID)
+	s.redis.Del(ctx, cacheKey)
+
+	cacheKey = "type:firstpage"
+	s.redis.Del(ctx, cacheKey)
+
+	cacheKey = "type:all"
 	s.redis.Del(ctx, cacheKey)
 
 	return s.GetTypeByID(typeID)
@@ -90,8 +141,100 @@ func (s *typeService) DeleteType(typeID string) error {
 	ctx := context.Background()
 	cacheKey := fmt.Sprintf("type:%s", typeID)
 	s.redis.Del(ctx, cacheKey)
+	cacheKey = "type:firstpage"
+	s.redis.Del(ctx, cacheKey)
+	cacheKey = "type:all"
+	s.redis.Del(ctx, cacheKey)
 
 	return s.repository.DeleteType(typeID)
+}
+
+func (s *typeService) GetAllTypePaginate(cursor *dto.Paginate, limit int) ([]dto.TypeResponse, *dto.Paginate, error) {
+	ctx := context.Background()
+	cacheKey := "type:firstpage"
+
+	var types []entity.Type
+
+	if cursor == nil {
+		cached, err := s.redis.Get(ctx, cacheKey).Result()
+		if err == nil {
+			var typesCache []entity.Type
+			if json.Unmarshal([]byte(cached), &typesCache) == nil {
+				types = typesCache
+			}
+		}
+	}
+
+	if len(types) == 0 {
+		var err error
+		types, err = s.repository.GetAllTypePaginate(cursor, limit)
+		if err != nil {
+			return nil, nil, &errorhandler.NotFoundError{Message: "Data Not Found"}
+		}
+
+		if cursor == nil {
+			jsonData, _ := json.Marshal(types)
+			s.redis.Set(ctx, cacheKey, jsonData, 15*time.Minute)
+		}
+	}
+
+	var paginate *dto.Paginate
+
+	if len(types) > 0 {
+		isNext := cursor == nil || cursor.Direction == nil || *cursor.Direction == "next"
+		isPrev := cursor != nil && cursor.Direction != nil && *cursor.Direction == "prev"
+
+		hasNext := "false"
+		hasPrev := "false"
+
+		if isNext {
+			if len(types) > limit {
+				hasNext = "true"
+				types = types[:limit]
+			}
+			if cursor != nil && cursor.LastID != nil {
+				hasPrev = "true"
+			}
+		} else if isPrev {
+			if len(types) > limit {
+				hasPrev = "true"
+				types = types[1:]
+			}
+			hasNext = "true"
+		}
+
+		direction := "next"
+		if isPrev {
+			direction = "prev"
+		}
+
+		first := types[0]
+		last := types[len(types)-1]
+		paginate = &dto.Paginate{
+			FirstID:        &first.TypeID,
+			FirstCreatedAt: &first.CreatedAt,
+			LastID:         &last.TypeID,
+			LastCreatedAt:  &last.CreatedAt,
+			HasNext:        &hasNext,
+			HasPrev:        &hasPrev,
+			Direction:      &direction,
+		}
+	}
+
+	responses := make([]dto.TypeResponse, 0, len(types))
+	for _, t := range types {
+		responses = append(responses, dto.TypeResponse{
+			TypeID:   t.TypeID,
+			TypeCode: t.TypeCode,
+			TypeName: t.TypeName,
+			TypeDesc: t.TypeDesc,
+		})
+	}
+
+	jsonData, _ := json.Marshal(responses)
+	s.redis.Set(ctx, cacheKey, jsonData, 15*time.Minute)
+
+	return responses, paginate, nil
 }
 
 func (s *typeService) GetAllType() ([]dto.TypeResponse, error) {
@@ -107,10 +250,10 @@ func (s *typeService) GetAllType() ([]dto.TypeResponse, error) {
 
 	types, err := s.repository.GetAllType()
 	if err != nil {
-		return nil, &errorhandler.NotFoundError{Message: "Data Not Found"}
+		return nil, &errorhandler.NotFoundError{Message: "Type Not Found"}
 	}
 
-	var responses []dto.TypeResponse
+	responses := make([]dto.TypeResponse, 0, len(types))
 	for _, t := range types {
 		responses = append(responses, dto.TypeResponse{
 			TypeID:   t.TypeID,
@@ -119,9 +262,6 @@ func (s *typeService) GetAllType() ([]dto.TypeResponse, error) {
 			TypeDesc: t.TypeDesc,
 		})
 	}
-
-	jsonData, _ := json.Marshal(responses)
-	s.redis.Set(ctx, cacheKey, jsonData, 15*time.Minute)
 
 	return responses, nil
 }

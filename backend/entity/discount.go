@@ -3,7 +3,7 @@ package entity
 import "time"
 
 type Discount struct {
-	DiscountID    string
+	DiscountID    string `gorm:"primaryKey"`
 	ProductID     string
 	DiscountName  string
 	DiscountType  string

@@ -31,6 +31,7 @@ type CreateProductRequest struct {
 
 type UpdateProductRequest struct {
 	ProductName string   `json:"product_name"`
+	ProductCode string   `json:"product_code"`
 	WeightGram  int      `json:"weight_gram"`
 	TypeID      string   `json:"type_id"`
 	Description string   `json:"description"`
@@ -55,4 +56,24 @@ type ProductImageResponse struct {
 	ImageID     string `json:"image_id"`
 	PicturePath string `json:"picture_path"`
 	IsPrimary   int    `json:"is_primary"`
+}
+
+type ProductListRow struct {
+	ProductID         string    `json:"product_id"`
+	ProductCode       string    `json:"product_code"`
+	ProductName       string    `json:"product_name"`
+	ProductSlug       string    `json:"product_slug"`
+	WeightGram        int       `json:"weight_gram"`
+	TypeID            string    `json:"type_id"`
+	TypeName          string    `json:"type_name"`
+	Description       string    `json:"description"`
+	Status            int       `json:"status"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
+	Stock             int64     `json:"stock"`
+	ReservedStock     int64     `json:"reserved_stock"`
+	ProductPrice      float64   `json:"product_price"`
+	IsPriceSet        int       `json:"is_price_set"`
+	IsStockSet        int       `json:"is_stock_set"`
+	AvailableDiscount int64     `json:"available_discount"`
 }

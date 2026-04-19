@@ -3,7 +3,7 @@ package entity
 import "time"
 
 type User struct {
-	UserID     string
+	UserID     string `gorm:"primaryKey"`
 	Name       string
 	Email      string
 	Status     int

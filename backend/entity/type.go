@@ -3,7 +3,7 @@ package entity
 import "time"
 
 type Type struct {
-	TypeID    string
+	TypeID    string `gorm:"primaryKey"`
 	TypeCode  string
 	TypeName  string
 	TypeDesc  string

@@ -35,7 +35,7 @@ func (s *authService) Register(req *dto.RegisterRequest, userType string) error 
 		return &errorhandler.BadRequestError{Message: "invalid email format"}
 	}
 
-	if emailExist := s.repositoryA.EmailExist(req.Email); emailExist {
+	if emailExist := s.repositoryA.EmailExist(helper.LowerAndTrim(req.Email)); emailExist {
 		return &errorhandler.BadRequestError{Message: "email already registered"}
 	}
 
@@ -55,8 +55,8 @@ func (s *authService) Register(req *dto.RegisterRequest, userType string) error 
 
 	user := entity.User{
 		UserID:     uuid.New().String(),
-		Name:       req.Name,
-		Email:      req.Email,
+		Name:       helper.UpperAndTrim(req.Name),
+		Email:      helper.LowerAndTrim(req.Email),
 		Password:   passwordHash,
 		CreatedAt:  helper.TimeNowWIB(),
 		UpdatedAt:  helper.TimeNowWIB(),
@@ -77,7 +77,7 @@ func (s *authService) Register(req *dto.RegisterRequest, userType string) error 
 
 func (s *authService) Login(req *dto.LoginRequest) (*dto.LoginResponse, error) {
 
-	user, err := s.repositoryA.GetUserByEmail(req.Email)
+	user, err := s.repositoryA.GetUserByEmail(helper.LowerAndTrim(req.Email))
 
 	if err != nil {
 		return nil, &errorhandler.NotFoundError{Message: "wrong email or password"}

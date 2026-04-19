@@ -3,7 +3,7 @@ package entity
 import "time"
 
 type ProductImage struct {
-	ImageID     string
+	ImageID     string `gorm:"primaryKey"`
 	ProductID   string
 	PicturePath string
 	IsPrimary   int

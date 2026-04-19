@@ -6,6 +6,7 @@ import (
 	"backend/helper"
 	"backend/service"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -75,17 +76,64 @@ func (h *typeHandler) Delete(c *gin.Context) {
 }
 
 func (h *typeHandler) GetAll(c *gin.Context) {
-	data, err := h.service.GetAllType()
+
+	direction := c.Query("direction")
+	id := c.Query("id")
+	createdAt := c.Query("created_at")
+
+	if id == "" && createdAt == "" && direction == "" {
+		types, err := h.service.GetAllType()
+		if err != nil {
+			errorhandler.ErrorHandler(c, err)
+			return
+		}
+		c.JSON(200, dto.ResponseParam{
+			StatusCode: 200,
+			Message:    "success",
+			Data:       types,
+		})
+		return
+	}
+
+	limit := 5
+	var cursor *dto.Paginate
+
+	if id != "" && createdAt != "" {
+		t, err := time.Parse(time.RFC3339, createdAt)
+		if err != nil {
+			c.JSON(400, dto.ResponseParam{
+				StatusCode: 400,
+				Message:    "invalid created_at format",
+			})
+			return
+		}
+
+		cursor = &dto.Paginate{}
+
+		if direction == "prev" {
+			cursor.Direction = &direction
+			cursor.FirstID = &id
+			cursor.FirstCreatedAt = &t
+		} else {
+			dirNext := "next"
+			cursor.Direction = &dirNext
+			cursor.LastID = &id
+			cursor.LastCreatedAt = &t
+		}
+	}
+
+	products, paginate, err := h.service.GetAllTypePaginate(cursor, limit)
 	if err != nil {
 		errorhandler.ErrorHandler(c, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, helper.BuildResponse(dto.ResponseParam{
-		StatusCode: http.StatusOK,
-		Message:    "Success",
-		Data:       data,
-	}))
+	c.JSON(200, dto.ResponseParam{
+		StatusCode: 200,
+		Message:    "success",
+		Paginate:   paginate,
+		Data:       products,
+	})
 }
 
 func (h *typeHandler) GetByID(c *gin.Context) {

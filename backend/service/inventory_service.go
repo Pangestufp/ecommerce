@@ -36,14 +36,20 @@ func NewInventoryService(repository repository.InventoryRepository, productRepos
 }
 
 func (s *inventoryService) Create(req *dto.CreateInventoryRequest) (*dto.InventoryResponse, error) {
-	_, err := s.productRepository.GetProductByID(req.ProductID)
+	product, err := s.productRepository.GetProductByID(req.ProductID)
 	if err != nil {
 		return nil, &errorhandler.NotFoundError{Message: "Product Not Found"}
 	}
 
+	seq, yearMonth, err := s.repository.GetNextSeq(product.ProductID)
+
+	if err != nil {
+		return nil, &errorhandler.InternalServerError{Message: "Fail to make batch"}
+	}
+
 	inv := entity.Inventory{
 		BatchID:       uuid.New().String(),
-		BatchCode:     req.BatchCode,
+		BatchCode:     fmt.Sprintf("%s-%s-%06d", product.ProductCode, yearMonth, seq),
 		ProductID:     req.ProductID,
 		CostPrice:     req.CostPrice,
 		Stock:         req.Stock,

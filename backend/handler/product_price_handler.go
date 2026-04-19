@@ -39,7 +39,7 @@ func (h *productPriceHandler) Create(c *gin.Context) {
 }
 
 func (h *productPriceHandler) GetAll(c *gin.Context) {
-	productID := c.Param("product_id")
+	productID := c.Param("id")
 
 	data, err := h.service.GetAllByProductID(productID)
 	if err != nil {

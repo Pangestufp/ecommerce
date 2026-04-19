@@ -3,7 +3,7 @@ package entity
 import "time"
 
 type Product struct {
-	ProductID   string
+	ProductID   string `gorm:"primaryKey"`
 	ProductCode string
 	ProductName string
 	ProductSlug string

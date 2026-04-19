@@ -6,6 +6,7 @@ import (
 	"backend/helper"
 	"backend/service"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -118,4 +119,51 @@ func (h *ProductHandler) Delete(c *gin.Context) {
 		StatusCode: http.StatusOK,
 		Message:    "Success",
 	}))
+}
+
+func (h *ProductHandler) GetAllPaginated(c *gin.Context) {
+	limit := 5
+
+	var cursor *dto.Paginate
+
+	direction := c.Query("direction")
+	id := c.Query("id")
+	createdAt := c.Query("created_at")
+
+	if id != "" && createdAt != "" {
+		t, err := time.Parse(time.RFC3339, createdAt)
+		if err != nil {
+			c.JSON(400, dto.ResponseParam{
+				StatusCode: 400,
+				Message:    "invalid created_at format",
+			})
+			return
+		}
+
+		cursor = &dto.Paginate{}
+
+		if direction == "prev" {
+			cursor.Direction = &direction
+			cursor.FirstID = &id
+			cursor.FirstCreatedAt = &t
+		} else {
+			dirNext := "next"
+			cursor.Direction = &dirNext
+			cursor.LastID = &id
+			cursor.LastCreatedAt = &t
+		}
+	}
+
+	products, paginate, err := h.service.GetAllPaginated(cursor, limit)
+	if err != nil {
+		errorhandler.ErrorHandler(c, err)
+		return
+	}
+
+	c.JSON(200, dto.ResponseParam{
+		StatusCode: 200,
+		Message:    "success",
+		Paginate:   paginate,
+		Data:       products,
+	})
 }

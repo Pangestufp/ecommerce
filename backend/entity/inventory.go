@@ -3,7 +3,7 @@ package entity
 import "time"
 
 type Inventory struct {
-	BatchID       string
+	BatchID       string `gorm:"primaryKey"`
 	BatchCode     string
 	ProductID     string
 	CostPrice     float64

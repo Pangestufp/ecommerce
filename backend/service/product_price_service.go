@@ -30,6 +30,7 @@ func NewProductPriceService(repository repository.ProductPriceRepository, produc
 	return &productPriceService{
 		repository:        repository,
 		productRepository: productRepository,
+		redis:             redis,
 	}
 }
 

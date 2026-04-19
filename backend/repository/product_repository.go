@@ -1,8 +1,10 @@
 package repository
 
 import (
+	"backend/dto"
 	"backend/entity"
 	"backend/errorhandler"
+	"backend/helper"
 	"log"
 
 	"gorm.io/gorm"
@@ -17,6 +19,10 @@ type ProductRepository interface {
 	GetAll() ([]entity.Product, error)
 	Delete(productID string) error
 	DeleteImagesByProductID(productID string) ([]entity.ProductImage, error)
+	GetProductByProductCode(productCode string) (*entity.Product, error)
+	GetProductByProductSlug(productSlug string) (*entity.Product, error)
+	GetProductEnriched(productID string) (*dto.ProductEnrichedForES, error)
+	GetAllProductsPaginated(cursor *dto.Paginate, limit int) ([]dto.ProductListRow, error)
 }
 
 type productRepository struct {
@@ -57,6 +63,26 @@ func (r *productRepository) GetProductByID(productID string) (*entity.Product, e
 	var product entity.Product
 
 	if err := r.db.First(&product, "product_id = ?", productID).Error; err != nil {
+		return nil, err
+	}
+
+	return &product, nil
+}
+
+func (r *productRepository) GetProductByProductCode(productCode string) (*entity.Product, error) {
+	var product entity.Product
+
+	if err := r.db.First(&product, "product_code = ?", productCode).Error; err != nil {
+		return nil, err
+	}
+
+	return &product, nil
+}
+
+func (r *productRepository) GetProductByProductSlug(productSlug string) (*entity.Product, error) {
+	var product entity.Product
+
+	if err := r.db.First(&product, "product_slug = ?", productSlug).Error; err != nil {
 		return nil, err
 	}
 
@@ -105,4 +131,183 @@ func (r *productRepository) DeleteImagesByProductID(productID string) ([]entity.
 	r.db.Where("product_id = ?", productID).Delete(&entity.ProductImage{})
 
 	return images, nil
+}
+
+func (r *productRepository) GetProductEnriched(productID string) (*dto.ProductEnrichedForES, error) {
+	var product dto.ProductEnrichedForES
+
+	now := helper.TimeNowWIB()
+
+	query := `
+		SELECT 
+			p.product_id,
+			p.product_code,
+			p.product_name,
+			p.product_slug,
+			p.weight_gram,
+			p.type_id,
+			t.type_name,
+			t.type_code,
+			p.description,
+			d.discount_id,
+			d.discount_name,
+			d.discount_type,
+			d.discount_value,
+			COALESCE(pp.product_price, 0) AS product_price,
+			CASE
+				WHEN d.discount_type = 'amount' THEN d.discount_value
+				WHEN d.discount_type = 'percentage' THEN COALESCE(pp.product_price, 0) * d.discount_value / 100
+				ELSE 0
+			END AS best_discount,
+			GREATEST(
+				CASE
+					WHEN d.discount_type = 'amount' THEN COALESCE(pp.product_price, 0) - d.discount_value
+					WHEN d.discount_type = 'percentage' THEN COALESCE(pp.product_price, 0) - (COALESCE(pp.product_price, 0) * d.discount_value / 100)
+					ELSE 0
+				END,
+				1
+			) AS best_price,
+			SUM(COALESCE(i.stock, 0)) AS stok,
+			SUM(COALESCE(i.reserved_stock, 0)) AS reserved_stock,
+			SUM(COALESCE(i.stock, 0)) - SUM(COALESCE(i.reserved_stock, 0)) AS available_stock,
+			CASE
+				WHEN SUM(COALESCE(i.stock, 0)) = 0 OR COALESCE(pp.product_price, 0) = 0 THEN 0
+				ELSE 1
+			END AS available
+		FROM products p
+		JOIN types t ON p.type_id = t.type_id
+		LEFT JOIN (
+			SELECT
+				product_id,
+				SUM(COALESCE(stock, 0)) AS stock,
+				SUM(COALESCE(reserved_stock, 0)) AS reserved_stock
+			FROM inventories
+			WHERE product_id = ?
+			GROUP BY product_id
+		) i ON p.product_id = i.product_id
+		LEFT JOIN (
+			SELECT
+				product_id,
+				discount_id,
+				discount_name,
+				discount_type,
+				discount_value
+			FROM discounts
+			WHERE
+				product_id = ?
+				AND start_at <= ?
+				AND expired_at >= ?
+		) d ON p.product_id = d.product_id
+		LEFT JOIN (
+			SELECT product_price, product_id
+			FROM product_prices
+			WHERE product_id = ?
+			ORDER BY created_at DESC
+			LIMIT 1
+		) pp ON p.product_id = pp.product_id
+		WHERE p.product_id = ? AND p.status = 1
+		GROUP BY 
+			p.product_id, p.type_id, t.type_name, t.type_code,
+			d.discount_id, d.discount_name, d.discount_type, d.discount_value,
+			pp.product_price
+		ORDER BY best_discount DESC
+		LIMIT 1
+	`
+
+	if err := r.db.Raw(query, productID, productID, now, now, productID, productID).Scan(&product).Error; err != nil {
+		return nil, err
+	}
+
+	return &product, nil
+}
+
+func (r *productRepository) GetAllProductsPaginated(cursor *dto.Paginate, limit int) ([]dto.ProductListRow, error) {
+	now := helper.TimeNowWIB()
+
+	if limit <= 0 {
+		limit = 5
+	}
+
+	query := `
+		SELECT
+			p.product_id,
+			p.product_code,
+			p.product_name,
+			p.product_slug,
+			p.weight_gram,
+			p.type_id,
+			t.type_code || ' - ' || t.type_name AS type_name,
+			p.description,
+			p.status,
+			p.created_at,
+			p.updated_at,
+			COALESCE(i.stock, 0) AS stock,
+			COALESCE(i.reserved_stock, 0) AS reserved_stock,
+			COALESCE(pp.product_price, 0) AS product_price,
+			CASE
+				WHEN pp.product_price IS NULL THEN 0
+				ELSE 1
+			END AS is_price_set,
+			CASE
+				WHEN i.stock IS NULL THEN 0
+				ELSE 1
+			END AS is_stock_set,
+			COALESCE(d.available_discount, 0) AS available_discount
+		FROM products p
+		JOIN types t ON p.type_id = t.type_id
+		LEFT JOIN (
+			SELECT product_id,
+				   SUM(stock) AS stock,
+				   SUM(reserved_stock) AS reserved_stock
+			FROM inventories
+			GROUP BY product_id
+		) i ON p.product_id = i.product_id
+		LEFT JOIN (
+			SELECT DISTINCT ON (product_id)
+				product_id, product_price
+			FROM product_prices
+			ORDER BY product_id, created_at DESC
+		) pp ON p.product_id = pp.product_id
+		LEFT JOIN (
+			SELECT product_id, COUNT(*) AS available_discount
+			FROM discounts
+			WHERE start_at <= ? AND expired_at >= ?
+			GROUP BY product_id
+		) d ON p.product_id = d.product_id
+	`
+
+	args := []interface{}{now, now}
+
+	if cursor != nil {
+		if cursor.Direction != nil && *cursor.Direction == "prev" {
+			if cursor.FirstID != nil && cursor.FirstCreatedAt != nil {
+				query += ` WHERE (p.created_at, p.product_id) > (?, ?)`
+				args = append(args, cursor.FirstCreatedAt, cursor.FirstID)
+				query += ` ORDER BY p.created_at ASC, p.product_id ASC LIMIT ?`
+			}
+		} else {
+			if cursor.LastID != nil && cursor.LastCreatedAt != nil {
+				query += ` WHERE (p.created_at, p.product_id) < (?, ?)`
+				args = append(args, cursor.LastCreatedAt, cursor.LastID)
+			}
+			query += ` ORDER BY p.created_at DESC, p.product_id DESC LIMIT ?`
+		}
+	} else {
+		query += ` ORDER BY p.created_at DESC, p.product_id DESC LIMIT ?`
+	}
+
+	args = append(args, limit+1)
+
+	var products []dto.ProductListRow
+	if err := r.db.Raw(query, args...).Scan(&products).Error; err != nil {
+		return nil, err
+	}
+
+	if cursor != nil && cursor.Direction != nil && *cursor.Direction == "prev" {
+		for i, j := 0, len(products)-1; i < j; i, j = i+1, j-1 {
+			products[i], products[j] = products[j], products[i]
+		}
+	}
+
+	return products, nil
 }

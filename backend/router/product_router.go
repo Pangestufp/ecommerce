@@ -13,15 +13,16 @@ import (
 
 func ProductRouter(api *gin.RouterGroup) {
 	ProductRepository := repository.NewProductRepository(config.DB)
-	ProductService := service.NewProductService(ProductRepository, config.MinioClient, config.RedisClient, "product-bucket")
+	ProductService := service.NewProductService(ProductRepository, config.MinioClient, config.RedisClient, config.ENV.MinioBucket)
 	ProductHandler := handler.NewProductHandler(ProductService)
 
 	Product := api.Group("/product")
 
 	Product.Use(middleware.JWTMiddleware())
 
+	Product.POST("/GeneratePresignedURLs", middleware.RoleMiddleware(helper.Admin()), ProductHandler.GeneratePresignedURLs)
 	Product.POST("", middleware.RoleMiddleware(helper.Admin()), ProductHandler.Create)
-	Product.GET("", ProductHandler.GetAll)
+	Product.GET("", ProductHandler.GetAllPaginated)
 	Product.GET("/:id", ProductHandler.GetByID)
 	Product.PUT("/:id", middleware.RoleMiddleware(helper.Admin()), ProductHandler.Update)
 	Product.DELETE("/:id", middleware.RoleMiddleware(helper.Admin()), ProductHandler.Delete)

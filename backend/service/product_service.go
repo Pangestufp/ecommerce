@@ -8,6 +8,7 @@ import (
 	"backend/repository"
 	"context"
 	"fmt"
+	"log"
 	"path/filepath"
 	"time"
 
@@ -24,6 +25,7 @@ type ProductService interface {
 	GetByID(productID string) (*dto.ProductResponse, error)
 	GetAll() ([]dto.ProductResponse, error)
 	Delete(productID string) error
+	GetAllPaginated(cursor *dto.Paginate, limit int) ([]dto.ProductListRow, *dto.Paginate, error)
 }
 
 type productService struct {
@@ -109,11 +111,21 @@ func (s *productService) buildImages(productID string, objectNames []string) ([]
 }
 
 func (s *productService) Create(req dto.CreateProductRequest) (*dto.ProductResponse, error) {
+	data, err := s.repo.GetProductByProductCode(helper.UpperAndTrim(req.ProductCode))
+	if err == nil && data != nil {
+		return nil, &errorhandler.ForbiddenError{Message: "Product Code Telah digunakan"}
+	}
+
+	data, err = s.repo.GetProductByProductSlug(slug.Make(helper.TitleCase(req.ProductName)))
+	if err == nil && data != nil {
+		return nil, &errorhandler.ForbiddenError{Message: "Product Name Telah digunakan"}
+	}
+
 	product := entity.Product{
 		ProductID:   uuid.New().String(),
-		ProductCode: req.ProductCode,
-		ProductName: req.ProductName,
-		ProductSlug: slug.Make(req.ProductName),
+		ProductCode: helper.UpperAndTrim(req.ProductCode),
+		ProductName: helper.TitleCase(req.ProductName),
+		ProductSlug: slug.Make(helper.TitleCase(req.ProductName)),
 		WeightGram:  req.WeightGram,
 		TypeID:      req.TypeID,
 		Description: req.Description,
@@ -131,7 +143,7 @@ func (s *productService) Create(req dto.CreateProductRequest) (*dto.ProductRespo
 		images, errs := s.buildImages(product.ProductID, req.Images)
 		if len(errs) > 0 {
 			//successImages := len(images)
-
+			log.Println("error ", len(errs))
 			// send only successImages of len(req.Images) saved
 		}
 
@@ -150,8 +162,23 @@ func (s *productService) Update(productID string, req dto.UpdateProductRequest) 
 		return nil, &errorhandler.NotFoundError{Message: "product not found"}
 	}
 
-	product.ProductName = req.ProductName
-	product.ProductSlug = slug.Make(req.ProductName)
+	if helper.UpperAndTrim(req.ProductCode) != product.ProductCode {
+		data, err := s.repo.GetProductByProductCode(helper.UpperAndTrim(req.ProductCode))
+		if err == nil && data != nil {
+			return nil, &errorhandler.ForbiddenError{Message: "Product Code Telah digunakan"}
+		}
+	}
+
+	if helper.TitleCase(req.ProductName) != product.ProductName {
+		data, err := s.repo.GetProductByProductSlug(slug.Make(helper.TitleCase(req.ProductName)))
+		if err == nil && data != nil {
+			return nil, &errorhandler.ForbiddenError{Message: "Product Name Telah digunakan"}
+		}
+	}
+
+	product.ProductName = helper.TitleCase(req.ProductName)
+	product.ProductCode = helper.UpperAndTrim(req.ProductCode)
+	product.ProductSlug = slug.Make(helper.TitleCase(req.ProductName))
 	product.WeightGram = req.WeightGram
 	product.TypeID = req.TypeID
 	product.Description = req.Description
@@ -255,4 +282,55 @@ func (s *productService) Delete(productID string) error {
 	}
 
 	return s.repo.Delete(productID)
+}
+
+func (s *productService) GetAllPaginated(cursor *dto.Paginate, limit int) ([]dto.ProductListRow, *dto.Paginate, error) {
+	products, err := s.repo.GetAllProductsPaginated(cursor, limit)
+	if err != nil {
+		return nil, nil, &errorhandler.InternalServerError{Message: err.Error()}
+	}
+
+	var paginate *dto.Paginate
+	if len(products) > 0 {
+		isNext := cursor == nil || cursor.Direction == nil || *cursor.Direction == "next"
+		isPrev := cursor != nil && cursor.Direction != nil && *cursor.Direction == "prev"
+
+		hasNext := "false"
+		hasPrev := "false"
+
+		if isNext {
+			if len(products) > limit {
+				hasNext = "true"
+				products = products[:limit]
+			}
+			if cursor != nil && cursor.LastID != nil {
+				hasPrev = "true"
+			}
+		} else if isPrev {
+			if len(products) > limit {
+				hasPrev = "true"
+				products = products[1:]
+			}
+			hasNext = "true"
+		}
+
+		direction := "next"
+		if isPrev {
+			direction = "prev"
+		}
+
+		first := products[0]
+		last := products[len(products)-1]
+		paginate = &dto.Paginate{
+			FirstID:        &first.ProductID,
+			FirstCreatedAt: &first.CreatedAt,
+			LastID:         &last.ProductID,
+			LastCreatedAt:  &last.CreatedAt,
+			HasNext:        &hasNext,
+			HasPrev:        &hasPrev,
+			Direction:      &direction,
+		}
+	}
+
+	return products, paginate, nil
 }
