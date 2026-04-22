@@ -80,6 +80,7 @@ func (h *typeHandler) GetAll(c *gin.Context) {
 	direction := c.Query("direction")
 	id := c.Query("id")
 	createdAt := c.Query("created_at")
+	search := c.Query("search")
 
 	if id == "" && createdAt == "" && direction == "" {
 		types, err := h.service.GetAllType()
@@ -122,7 +123,7 @@ func (h *typeHandler) GetAll(c *gin.Context) {
 		}
 	}
 
-	products, paginate, err := h.service.GetAllTypePaginate(cursor, limit)
+	products, paginate, err := h.service.GetAllTypePaginate(cursor, search, limit)
 	if err != nil {
 		errorhandler.ErrorHandler(c, err)
 		return

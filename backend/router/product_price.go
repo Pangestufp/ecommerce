@@ -14,7 +14,8 @@ import (
 func ProductPriceRouter(api *gin.RouterGroup) {
 	ProductPriceRepository := repository.NewProductPriceRepository(config.DB)
 	ProductRepository := repository.NewProductRepository(config.DB)
-	ProductPriceService := service.NewProductPriceService(ProductPriceRepository, ProductRepository, config.RedisClient)
+	UserRepository := repository.NewUserRepository(config.DB)
+	ProductPriceService := service.NewProductPriceService(ProductPriceRepository, ProductRepository, UserRepository, config.RedisClient)
 	ProductPriceHandler := handler.NewProductPriceHandler(ProductPriceService)
 
 	ProductPrice := api.Group("/productPrice")

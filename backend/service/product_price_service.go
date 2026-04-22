@@ -7,35 +7,40 @@ import (
 	"backend/helper"
 	"backend/repository"
 	"context"
-	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 )
 
 type ProductPriceService interface {
-	Create(req *dto.CreateProductPriceRequest) (*dto.ProductPriceResponse, error)
-	GetAllByProductID(productID string) ([]dto.ProductPriceResponse, error)
+	Create(req *dto.CreateProductPriceRequest, userID string) (*dto.ProductPriceResponse, error)
+	GetAllByProductID(productID string, cursor *dto.Paginate, limit int) ([]dto.ProductPriceResponse, *dto.Paginate, error)
 }
 
 type productPriceService struct {
 	repository        repository.ProductPriceRepository
 	productRepository repository.ProductRepository
+	userRepository    repository.UserRepository
 	redis             *redis.Client
 }
 
-func NewProductPriceService(repository repository.ProductPriceRepository, productRepository repository.ProductRepository, redis *redis.Client) *productPriceService {
+func NewProductPriceService(repository repository.ProductPriceRepository, productRepository repository.ProductRepository, userRepository repository.UserRepository, redis *redis.Client) *productPriceService {
 	return &productPriceService{
 		repository:        repository,
 		productRepository: productRepository,
+		userRepository:    userRepository,
 		redis:             redis,
 	}
 }
 
-func (s *productPriceService) Create(req *dto.CreateProductPriceRequest) (*dto.ProductPriceResponse, error) {
-	_, err := s.productRepository.GetProductByID(req.ProductID)
+func (s *productPriceService) Create(req *dto.CreateProductPriceRequest, userID string) (*dto.ProductPriceResponse, error) {
+	user, err := s.userRepository.GetUserByID(userID)
+	if err != nil {
+		return nil, &errorhandler.NotFoundError{Message: "User Invalid"}
+	}
+
+	_, err = s.productRepository.GetProductByID(req.ProductID)
 	if err != nil {
 		return nil, &errorhandler.NotFoundError{Message: "Product Not Found"}
 	}
@@ -45,6 +50,8 @@ func (s *productPriceService) Create(req *dto.CreateProductPriceRequest) (*dto.P
 		ProductID:    req.ProductID,
 		ProductPrice: req.ProductPrice,
 		CreatedAt:    helper.TimeNowWIB(),
+		CreatedBy:    userID,
+		CreatedName:  user.Name,
 	}
 
 	if err := s.repository.Create(&price); err != nil {
@@ -63,39 +70,71 @@ func (s *productPriceService) Create(req *dto.CreateProductPriceRequest) (*dto.P
 	}, nil
 }
 
-func (s *productPriceService) GetAllByProductID(productID string) ([]dto.ProductPriceResponse, error) {
-	ctx := context.Background()
-	cacheKey := fmt.Sprintf("ProductPrice:%s", productID)
-
-	cached, err := s.redis.Get(ctx, cacheKey).Result()
-	if err == nil {
-		var responses []dto.ProductPriceResponse
-		json.Unmarshal([]byte(cached), &responses)
-		return responses, nil
-	}
-
-	_, err = s.productRepository.GetProductByID(productID)
+func (s *productPriceService) GetAllByProductID(productID string, cursor *dto.Paginate, limit int) ([]dto.ProductPriceResponse, *dto.Paginate, error) {
+	_, err := s.productRepository.GetProductByID(productID)
 	if err != nil {
-		return nil, &errorhandler.NotFoundError{Message: "Product Not Found"}
+		return nil, nil, &errorhandler.NotFoundError{Message: "Product Not Found"}
 	}
 
-	prices, err := s.repository.GetAllByProductID(productID)
+	prices, err := s.repository.GetAllByProductID(productID, cursor, limit)
 	if err != nil {
-		return nil, &errorhandler.InternalServerError{Message: err.Error()}
+		return nil, nil, &errorhandler.InternalServerError{Message: err.Error()}
 	}
 
-	var responses []dto.ProductPriceResponse
+	var paginate *dto.Paginate
+
+	if len(prices) > 0 {
+		isNext := cursor == nil || cursor.Direction == nil || *cursor.Direction == "next"
+		isPrev := cursor != nil && cursor.Direction != nil && *cursor.Direction == "prev"
+
+		hasNext := "false"
+		hasPrev := "false"
+
+		if isNext {
+			if len(prices) > limit {
+				hasNext = "true"
+				prices = prices[:limit]
+			}
+			if cursor != nil && cursor.LastID != nil {
+				hasPrev = "true"
+			}
+		} else if isPrev {
+			if len(prices) > limit {
+				hasPrev = "true"
+				prices = prices[1:]
+			}
+			hasNext = "true"
+		}
+
+		direction := "next"
+		if isPrev {
+			direction = "prev"
+		}
+
+		first := prices[0]
+		last := prices[len(prices)-1]
+		paginate = &dto.Paginate{
+			FirstID:        &first.PriceID,
+			FirstCreatedAt: &first.CreatedAt,
+			LastID:         &last.PriceID,
+			LastCreatedAt:  &last.CreatedAt,
+			HasNext:        &hasNext,
+			HasPrev:        &hasPrev,
+			Direction:      &direction,
+		}
+	}
+
+	responses := make([]dto.ProductPriceResponse, 0, len(prices))
 	for _, p := range prices {
 		responses = append(responses, dto.ProductPriceResponse{
 			PriceID:      p.PriceID,
 			ProductID:    p.ProductID,
 			ProductPrice: p.ProductPrice,
 			CreatedAt:    p.CreatedAt,
+			CreatedBy:    p.CreatedBy,
+			CreatedName:  p.CreatedName,
 		})
 	}
 
-	jsonData, _ := json.Marshal(responses)
-	s.redis.Set(ctx, cacheKey, jsonData, 15*time.Minute)
-
-	return responses, nil
+	return responses, paginate, nil
 }

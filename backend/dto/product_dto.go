@@ -7,8 +7,7 @@ type PresignedURLRequest struct {
 }
 
 type FileItem struct {
-	FileName    string `json:"file_name"`
-	ContentType string `json:"content_type"`
+	FileName string `json:"file_name"`
 }
 
 type PresignedURLResponse struct {
@@ -45,6 +44,8 @@ type ProductResponse struct {
 	ProductSlug string                 `json:"product_slug"`
 	WeightGram  int                    `json:"weight_gram"`
 	TypeID      string                 `json:"type_id"`
+	TypeName    string                 `json:"type_name"`
+	TypeCode    string                 `json:"type_code"`
 	Description string                 `json:"description"`
 	Status      int                    `json:"status"`
 	Images      []ProductImageResponse `json:"images"`

@@ -22,7 +22,7 @@ type ProductRepository interface {
 	GetProductByProductCode(productCode string) (*entity.Product, error)
 	GetProductByProductSlug(productSlug string) (*entity.Product, error)
 	GetProductEnriched(productID string) (*dto.ProductEnrichedForES, error)
-	GetAllProductsPaginated(cursor *dto.Paginate, limit int) ([]dto.ProductListRow, error)
+	GetAllProductsPaginated(cursor *dto.Paginate, search string, limit int) ([]dto.ProductListRow, error)
 }
 
 type productRepository struct {
@@ -197,6 +197,7 @@ func (r *productRepository) GetProductEnriched(productID string) (*dto.ProductEn
 				product_id = ?
 				AND start_at <= ?
 				AND expired_at >= ?
+				AND status = 1
 		) d ON p.product_id = d.product_id
 		LEFT JOIN (
 			SELECT product_price, product_id
@@ -221,7 +222,16 @@ func (r *productRepository) GetProductEnriched(productID string) (*dto.ProductEn
 	return &product, nil
 }
 
-func (r *productRepository) GetAllProductsPaginated(cursor *dto.Paginate, limit int) ([]dto.ProductListRow, error) {
+func (r *productRepository) GetAllProductsPaginated(cursor *dto.Paginate, search string, limit int) ([]dto.ProductListRow, error) {
+	if cursor != nil {
+		if cursor.Direction == nil {
+			return nil, &errorhandler.BadRequestError{Message: "invalid cursor: direction is required"}
+		}
+		if *cursor.Direction == "prev" && (cursor.FirstID == nil || cursor.FirstCreatedAt == nil || *cursor.FirstID == "") {
+			return nil, &errorhandler.BadRequestError{Message: "invalid cursor: FirstID and FirstCreatedAt required for prev direction"}
+		}
+	}
+
 	now := helper.TimeNowWIB()
 
 	if limit <= 0 {
@@ -272,28 +282,49 @@ func (r *productRepository) GetAllProductsPaginated(cursor *dto.Paginate, limit 
 			SELECT product_id, COUNT(*) AS available_discount
 			FROM discounts
 			WHERE start_at <= ? AND expired_at >= ?
+			AND status = 1
 			GROUP BY product_id
 		) d ON p.product_id = d.product_id
-	`
+		 WHERE p.status = 1`
 
 	args := []interface{}{now, now}
 
+	if search != "" {
+		search = "%" + search + "%"
+	}
+
 	if cursor != nil {
 		if cursor.Direction != nil && *cursor.Direction == "prev" {
-			if cursor.FirstID != nil && cursor.FirstCreatedAt != nil {
-				query += ` WHERE (p.created_at, p.product_id) > (?, ?)`
-				args = append(args, cursor.FirstCreatedAt, cursor.FirstID)
-				query += ` ORDER BY p.created_at ASC, p.product_id ASC LIMIT ?`
+			if search != "" {
+				query += ` AND (p.product_code ILIKE ? OR p.product_name ILIKE ?)`
+				args = append(args, search, search)
 			}
-		} else {
-			if cursor.LastID != nil && cursor.LastCreatedAt != nil {
-				query += ` WHERE (p.created_at, p.product_id) < (?, ?)`
-				args = append(args, cursor.LastCreatedAt, cursor.LastID)
+			query += ` AND (p.created_at, p.product_id) > (?, ?)`
+			args = append(args, cursor.FirstCreatedAt, cursor.FirstID)
+			query += ` ORDER BY p.created_at ASC, p.product_id ASC LIMIT ?`
+		} else if cursor.Direction != nil && *cursor.Direction == "next" {
+			if search != "" {
+				query += ` AND (p.product_code ILIKE ? OR p.product_name ILIKE ?)`
+				args = append(args, search, search)
 			}
+			query += ` AND (p.created_at, p.product_id) < (?, ?)`
+			args = append(args, cursor.LastCreatedAt, cursor.LastID)
 			query += ` ORDER BY p.created_at DESC, p.product_id DESC LIMIT ?`
+		} else {
+			if search != "" {
+				query += ` AND (p.product_code ILIKE ? OR p.product_name ILIKE ?) ORDER BY p.created_at DESC, p.product_id DESC LIMIT ?`
+				args = append(args, search, search)
+			} else {
+				query += ` ORDER BY p.created_at DESC, p.product_id DESC LIMIT ?`
+			}
 		}
 	} else {
-		query += ` ORDER BY p.created_at DESC, p.product_id DESC LIMIT ?`
+		if search != "" {
+			query += ` AND (p.product_code ILIKE ? OR p.product_name ILIKE ?) ORDER BY p.created_at DESC, p.product_id DESC LIMIT ?`
+			args = append(args, search, search)
+		} else {
+			query += ` ORDER BY p.created_at DESC, p.product_id DESC LIMIT ?`
+		}
 	}
 
 	args = append(args, limit+1)

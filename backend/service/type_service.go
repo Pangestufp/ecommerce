@@ -19,7 +19,7 @@ type TypeService interface {
 	CreateType(req *dto.TypeRequest) (*dto.TypeResponse, error)
 	UpdateType(typeID string, req *dto.TypeRequest) (*dto.TypeResponse, error)
 	DeleteType(typeID string) error
-	GetAllTypePaginate(cursor *dto.Paginate, limit int) ([]dto.TypeResponse, *dto.Paginate, error)
+	GetAllTypePaginate(cursor *dto.Paginate, search string, limit int) ([]dto.TypeResponse, *dto.Paginate, error)
 	GetAllType() ([]dto.TypeResponse, error)
 	GetTypeByID(typeID string) (*dto.TypeResponse, error)
 }
@@ -36,15 +36,15 @@ func NewTypeService(repository repository.TypeRepository, redis *redis.Client) *
 func (s *typeService) CreateType(req *dto.TypeRequest) (*dto.TypeResponse, error) {
 
 	if req.TypeCode == "" {
-		return nil, &errorhandler.ForbiddenError{Message: "Type Code kosong"}
+		return nil, &errorhandler.BadRequestError{Message: "Type Code kosong"}
 	}
 
 	if req.TypeName == "" {
-		return nil, &errorhandler.ForbiddenError{Message: "Type Name kosong"}
+		return nil, &errorhandler.BadRequestError{Message: "Type Name kosong"}
 	}
 
 	if req.TypeDesc == "" {
-		return nil, &errorhandler.ForbiddenError{Message: "Type Description kosong"}
+		return nil, &errorhandler.BadRequestError{Message: "Type Description kosong"}
 	}
 	t := entity.Type{
 		TypeID:    uuid.New().String(),
@@ -74,10 +74,7 @@ func (s *typeService) CreateType(req *dto.TypeRequest) (*dto.TypeResponse, error
 
 	ctx := context.Background()
 
-	cacheKey := "type:firstpage"
-	s.redis.Del(ctx, cacheKey)
-
-	cacheKey = "type:all"
+	cacheKey := "type:all"
 	s.redis.Del(ctx, cacheKey)
 
 	return &response, nil
@@ -85,15 +82,15 @@ func (s *typeService) CreateType(req *dto.TypeRequest) (*dto.TypeResponse, error
 
 func (s *typeService) UpdateType(typeID string, req *dto.TypeRequest) (*dto.TypeResponse, error) {
 	if req.TypeCode == "" {
-		return nil, &errorhandler.ForbiddenError{Message: "Type Code kosong"}
+		return nil, &errorhandler.BadRequestError{Message: "Type Code kosong"}
 	}
 
 	if req.TypeName == "" {
-		return nil, &errorhandler.ForbiddenError{Message: "Type Name kosong"}
+		return nil, &errorhandler.BadRequestError{Message: "Type Name kosong"}
 	}
 
 	if req.TypeDesc == "" {
-		return nil, &errorhandler.ForbiddenError{Message: "Type Description kosong"}
+		return nil, &errorhandler.BadRequestError{Message: "Type Description kosong"}
 	}
 
 	t, err := s.repository.GetTypeByID(typeID)
@@ -121,9 +118,6 @@ func (s *typeService) UpdateType(typeID string, req *dto.TypeRequest) (*dto.Type
 	cacheKey := fmt.Sprintf("type:%s", typeID)
 	s.redis.Del(ctx, cacheKey)
 
-	cacheKey = "type:firstpage"
-	s.redis.Del(ctx, cacheKey)
-
 	cacheKey = "type:all"
 	s.redis.Del(ctx, cacheKey)
 
@@ -141,41 +135,19 @@ func (s *typeService) DeleteType(typeID string) error {
 	ctx := context.Background()
 	cacheKey := fmt.Sprintf("type:%s", typeID)
 	s.redis.Del(ctx, cacheKey)
-	cacheKey = "type:firstpage"
-	s.redis.Del(ctx, cacheKey)
 	cacheKey = "type:all"
 	s.redis.Del(ctx, cacheKey)
 
 	return s.repository.DeleteType(typeID)
 }
 
-func (s *typeService) GetAllTypePaginate(cursor *dto.Paginate, limit int) ([]dto.TypeResponse, *dto.Paginate, error) {
-	ctx := context.Background()
-	cacheKey := "type:firstpage"
+func (s *typeService) GetAllTypePaginate(cursor *dto.Paginate, search string, limit int) ([]dto.TypeResponse, *dto.Paginate, error) {
 
-	var types []entity.Type
+	var err error
 
-	if cursor == nil {
-		cached, err := s.redis.Get(ctx, cacheKey).Result()
-		if err == nil {
-			var typesCache []entity.Type
-			if json.Unmarshal([]byte(cached), &typesCache) == nil {
-				types = typesCache
-			}
-		}
-	}
-
-	if len(types) == 0 {
-		var err error
-		types, err = s.repository.GetAllTypePaginate(cursor, limit)
-		if err != nil {
-			return nil, nil, &errorhandler.NotFoundError{Message: "Data Not Found"}
-		}
-
-		if cursor == nil {
-			jsonData, _ := json.Marshal(types)
-			s.redis.Set(ctx, cacheKey, jsonData, 15*time.Minute)
-		}
+	types, err := s.repository.GetAllTypePaginate(cursor, search, limit)
+	if err != nil {
+		return nil, nil, &errorhandler.NotFoundError{Message: "Data Not Found"}
 	}
 
 	var paginate *dto.Paginate
@@ -231,9 +203,6 @@ func (s *typeService) GetAllTypePaginate(cursor *dto.Paginate, limit int) ([]dto
 		})
 	}
 
-	jsonData, _ := json.Marshal(responses)
-	s.redis.Set(ctx, cacheKey, jsonData, 15*time.Minute)
-
 	return responses, paginate, nil
 }
 
@@ -262,6 +231,9 @@ func (s *typeService) GetAllType() ([]dto.TypeResponse, error) {
 			TypeDesc: t.TypeDesc,
 		})
 	}
+
+	jsonData, _ := json.Marshal(responses)
+	s.redis.Set(ctx, cacheKey, jsonData, 15*time.Minute)
 
 	return responses, nil
 }

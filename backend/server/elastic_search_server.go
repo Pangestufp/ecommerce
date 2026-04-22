@@ -14,6 +14,7 @@ import (
 	"github.com/elastic/go-elasticsearch/v8"
 	"github.com/elastic/go-elasticsearch/v8/esapi"
 	"github.com/minio/minio-go/v7"
+	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 )
 
@@ -24,6 +25,7 @@ type ElasticSearchServer struct {
 	ProductRepo      repository.ProductRepository
 	MinioClient      *minio.Client
 	bucket           string
+	redis            *redis.Client
 }
 
 var Instance *ElasticSearchServer
@@ -36,6 +38,7 @@ func Initialize(db *gorm.DB) {
 		ProductRepo:      repository.NewProductRepository(db),
 		MinioClient:      config.MinioClient,
 		bucket:           config.ENV.MinioBucket,
+		redis:            config.RedisClient,
 	}
 	Instance.startESWriter()
 }
@@ -246,11 +249,28 @@ func (s *ElasticSearchServer) GetAllProducts() ([]*dto.ProductEnrichedForES, err
 }
 
 func (s *ElasticSearchServer) attachPresignedURLs(products []*dto.ProductEnrichedForES) {
+	ctx := context.Background()
+
 	for _, product := range products {
-		validImages := make([]dto.ProductImageForES, 0, len(product.Images))
 		for _, image := range product.Images {
+			if image.IsPrimary != 1 {
+				continue // skip yang bukan primary
+			}
+
+			cacheKey := fmt.Sprintf("image:%s", image.ImageID)
+
+			cached, err := s.redis.Get(ctx, cacheKey).Result()
+			if err == nil {
+				product.Images = []dto.ProductImageForES{{
+					ImageID:     image.ImageID,
+					PicturePath: cached,
+					IsPrimary:   image.IsPrimary,
+				}}
+				break
+			}
+
 			url, err := s.MinioClient.PresignedGetObject(
-				context.Background(),
+				ctx,
 				s.bucket,
 				image.PicturePath,
 				time.Minute*5,
@@ -258,11 +278,18 @@ func (s *ElasticSearchServer) attachPresignedURLs(products []*dto.ProductEnriche
 			)
 			if err != nil {
 				log.Printf("Failed to generate presigned URL for %s: %v", image.PicturePath, err)
-				continue
+				break
 			}
-			image.PicturePath = url.String()
-			validImages = append(validImages, image)
+
+			presignedURL := url.String()
+			s.redis.Set(ctx, cacheKey, presignedURL, 4*time.Minute)
+
+			product.Images = []dto.ProductImageForES{{
+				ImageID:     image.ImageID,
+				PicturePath: presignedURL,
+				IsPrimary:   image.IsPrimary,
+			}}
+			break
 		}
-		product.Images = validImages
 	}
 }

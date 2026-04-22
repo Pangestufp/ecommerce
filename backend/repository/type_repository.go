@@ -14,7 +14,7 @@ type TypeRepository interface {
 	UpdateType(t *entity.Type) error
 	DeleteType(typeID string) error
 	GetTypeByID(typeID string) (*entity.Type, error)
-	GetAllTypePaginate(cursor *dto.Paginate, limit int) ([]entity.Type, error)
+	GetAllTypePaginate(cursor *dto.Paginate, search string, limit int) ([]entity.Type, error)
 	GetAllType() ([]entity.Type, error)
 	GetTypeByTypeCode(typeCode string) (*entity.Type, error)
 }
@@ -80,7 +80,7 @@ func (r *typeRepository) GetTypeByTypeCode(typeCode string) (*entity.Type, error
 	return &t, nil
 }
 
-func (r *typeRepository) GetAllTypePaginate(cursor *dto.Paginate, limit int) ([]entity.Type, error) {
+func (r *typeRepository) GetAllTypePaginate(cursor *dto.Paginate, search string, limit int) ([]entity.Type, error) {
 	if limit <= 0 {
 		limit = 5
 	}
@@ -89,22 +89,35 @@ func (r *typeRepository) GetAllTypePaginate(cursor *dto.Paginate, limit int) ([]
 
 	query := r.db.Model(&entity.Type{}).
 		Where("status = ?", 1)
-
-	if cursor != nil && cursor.LastID != nil && cursor.LastCreatedAt != nil {
-		query = query.Where(
-			"(created_at, type_id) < (?, ?)",
-			cursor.LastCreatedAt,
-			cursor.LastID,
-		)
+	if search != "" {
+		query = query.Where("type_name ILIKE ? OR type_code ILIKE ?", "%"+search+"%", "%"+search+"%")
 	}
 
-	err := query.
-		Order("created_at DESC, type_id DESC").
-		Limit(limit).
-		Find(&types).Error
+	if cursor != nil {
+		if cursor.Direction != nil && *cursor.Direction == "prev" {
+			if cursor.FirstID != nil && cursor.FirstCreatedAt != nil {
+				query = query.Where("(created_at, type_id) > (?, ?)", cursor.FirstCreatedAt, cursor.FirstID)
+				query = query.Order("created_at ASC, type_id ASC")
+			}
+		} else {
+			if cursor.Direction != nil && *cursor.Direction == "next" {
+				query = query.Where("(created_at, type_id) < (?, ?)", cursor.LastCreatedAt, cursor.LastID)
+			}
+			query = query.Order("created_at DESC, type_id DESC")
+		}
+	} else {
+		query = query.Order("created_at DESC, type_id DESC")
+	}
 
+	err := query.Limit(limit + 1).Find(&types).Error
 	if err != nil {
 		return nil, err
+	}
+
+	if cursor != nil && cursor.Direction != nil && *cursor.Direction == "prev" {
+		for i, j := 0, len(types)-1; i < j; i, j = i+1, j-1 {
+			types[i], types[j] = types[j], types[i]
+		}
 	}
 
 	return types, nil

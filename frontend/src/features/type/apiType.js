@@ -18,10 +18,15 @@ const ApiType={
         const res = await api.get(Endpoints.TYPE.GET_BY_ID(id))
         return res
     },
-    getAll: async(id, createAt)=>{
-        const res = await api.get(Endpoints.TYPE.GET_ALL(id,createAt))
+    getAllPaginate: async(id, createAt, direction, search)=>{
+        const res = await api.get(Endpoints.TYPE.GET_ALL_PAGINATE(id,createAt,direction,search))
+        return res
+    },
+    getAll: async()=>{
+        const res = await api.get(Endpoints.TYPE.GET_ALL())
         return res
     }
+
 }
 
 export default ApiType

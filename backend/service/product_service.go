@@ -10,8 +10,10 @@ import (
 	"fmt"
 	"log"
 	"path/filepath"
+	"strings"
 	"time"
 
+	"github.com/gabriel-vasile/mimetype"
 	"github.com/google/uuid"
 	"github.com/gosimple/slug"
 	"github.com/minio/minio-go/v7"
@@ -25,27 +27,43 @@ type ProductService interface {
 	GetByID(productID string) (*dto.ProductResponse, error)
 	GetAll() ([]dto.ProductResponse, error)
 	Delete(productID string) error
-	GetAllPaginated(cursor *dto.Paginate, limit int) ([]dto.ProductListRow, *dto.Paginate, error)
+	GetAllPaginated(cursor *dto.Paginate, search string, limit int) ([]dto.ProductListRow, *dto.Paginate, error)
 }
 
 type productService struct {
 	repo   repository.ProductRepository
+	repoT  repository.TypeRepository
 	minio  *minio.Client
 	redis  *redis.Client
 	bucket string
 }
 
-func NewProductService(repo repository.ProductRepository, minio *minio.Client, redis *redis.Client, bucket string) *productService {
-	return &productService{repo: repo, minio: minio, redis: redis, bucket: bucket}
+func NewProductService(repo repository.ProductRepository, repoT repository.TypeRepository, minio *minio.Client, redis *redis.Client, bucket string) *productService {
+	return &productService{repo: repo, repoT: repoT, minio: minio, redis: redis, bucket: bucket}
 }
 
 func (s *productService) GeneratePresignedURLs(req dto.PresignedURLRequest) (*dto.PresignedURLResponse, error) {
-	var uploads []dto.UploadItem
+	var allowedExtensions = map[string]bool{
+		".jpg":  true,
+		".jpeg": true,
+		".png":  true,
+		".webp": true,
+		".gif":  true,
+	}
 
 	for _, file := range req.Files {
-		ext := filepath.Ext(file.FileName)
-		objectName := "temp/" + uuid.New().String() + ext
+		ext := strings.ToLower(filepath.Ext(file.FileName))
+		if !allowedExtensions[ext] {
+			return nil, &errorhandler.BadRequestError{
+				Message: fmt.Sprintf("tipe file '%s' tidak diizinkan", ext),
+			}
+		}
+	}
 
+	var uploads []dto.UploadItem
+	for _, file := range req.Files {
+		ext := strings.ToLower(filepath.Ext(file.FileName))
+		objectName := "temp/" + uuid.New().String() + ext
 		url, err := s.minio.PresignedPutObject(
 			context.Background(),
 			s.bucket,
@@ -55,7 +73,6 @@ func (s *productService) GeneratePresignedURLs(req dto.PresignedURLRequest) (*dt
 		if err != nil {
 			return nil, &errorhandler.InternalServerError{Message: err.Error()}
 		}
-
 		uploads = append(uploads, dto.UploadItem{
 			UploadURL:  url.String(),
 			ObjectName: objectName,
@@ -66,13 +83,45 @@ func (s *productService) GeneratePresignedURLs(req dto.PresignedURLRequest) (*dt
 }
 
 func (s *productService) moveFromTemp(objectName string) (string, error) {
-	permanentName := "products/" + uuid.New().String() + filepath.Ext(objectName)
+	obj, err := s.minio.GetObject(context.Background(), s.bucket, objectName, minio.GetObjectOptions{})
+	if err != nil {
+		return "", &errorhandler.InternalServerError{Message: err.Error()}
+	}
+	defer obj.Close()
 
+	stat, err := obj.Stat()
+	if err != nil {
+		return "", &errorhandler.InternalServerError{Message: err.Error()}
+	}
+
+	const maxSize = 5 * 1024 * 1024
+	if stat.Size > maxSize {
+		s.minio.RemoveObject(context.Background(), s.bucket, objectName, minio.RemoveObjectOptions{})
+		return "", &errorhandler.BadRequestError{Message: "ukuran file maksimal 5MB"}
+	}
+
+	mtype, err := mimetype.DetectReader(obj)
+	if err != nil {
+		return "", &errorhandler.InternalServerError{Message: err.Error()}
+	}
+
+	allowedMimes := map[string]bool{
+		"image/jpeg": true,
+		"image/png":  true,
+		"image/webp": true,
+		"image/gif":  true,
+	}
+	if !allowedMimes[mtype.String()] {
+		s.minio.RemoveObject(context.Background(), s.bucket, objectName, minio.RemoveObjectOptions{})
+		return "", &errorhandler.BadRequestError{Message: fmt.Sprintf("tipe file '%s' tidak diizinkan", mtype.String())}
+	}
+
+	permanentName := "products/" + uuid.New().String() + mtype.Extension()
 	src := minio.CopySrcOptions{Bucket: s.bucket, Object: objectName}
 	dst := minio.CopyDestOptions{Bucket: s.bucket, Object: permanentName}
 
 	if _, err := s.minio.CopyObject(context.Background(), dst, src); err != nil {
-		return "", err
+		return "", &errorhandler.InternalServerError{Message: err.Error()}
 	}
 
 	s.minio.RemoveObject(context.Background(), s.bucket, objectName, minio.RemoveObjectOptions{})
@@ -111,7 +160,28 @@ func (s *productService) buildImages(productID string, objectNames []string) ([]
 }
 
 func (s *productService) Create(req dto.CreateProductRequest) (*dto.ProductResponse, error) {
+	if req.ProductCode == "" {
+		return nil, &errorhandler.BadRequestError{Message: "Product Code kosong"}
+	}
+
+	if req.ProductName == "" {
+		return nil, &errorhandler.BadRequestError{Message: "Product Name kosong"}
+	}
+
+	if req.TypeID == "" {
+		return nil, &errorhandler.BadRequestError{Message: "Type ID kosong"}
+	}
+
+	if req.Description == "" {
+		return nil, &errorhandler.BadRequestError{Message: "Deskripsi kosong"}
+	}
+
+	if req.WeightGram < 0 {
+		return nil, &errorhandler.BadRequestError{Message: "Weight Gram kosong"}
+	}
+
 	data, err := s.repo.GetProductByProductCode(helper.UpperAndTrim(req.ProductCode))
+
 	if err == nil && data != nil {
 		return nil, &errorhandler.ForbiddenError{Message: "Product Code Telah digunakan"}
 	}
@@ -157,6 +227,27 @@ func (s *productService) Create(req dto.CreateProductRequest) (*dto.ProductRespo
 }
 
 func (s *productService) Update(productID string, req dto.UpdateProductRequest) (*dto.ProductResponse, error) {
+
+	if req.ProductCode == "" {
+		return nil, &errorhandler.BadRequestError{Message: "Product Code kosong"}
+	}
+
+	if req.ProductName == "" {
+		return nil, &errorhandler.BadRequestError{Message: "Product Name kosong"}
+	}
+
+	if req.TypeID == "" {
+		return nil, &errorhandler.BadRequestError{Message: "Type ID kosong"}
+	}
+
+	if req.Description == "" {
+		return nil, &errorhandler.BadRequestError{Message: "Deskripsi kosong"}
+	}
+
+	if req.WeightGram < 0 {
+		return nil, &errorhandler.BadRequestError{Message: "Weight Gram kosong"}
+	}
+
 	product, err := s.repo.GetProductByID(productID)
 	if err != nil {
 		return nil, &errorhandler.NotFoundError{Message: "product not found"}
@@ -225,12 +316,49 @@ func (s *productService) GetByID(productID string) (*dto.ProductResponse, error)
 
 	var imageResponses []dto.ProductImageResponse
 
+	ctx := context.Background()
+
 	for _, img := range images {
+		cacheKey := fmt.Sprintf("image:%s", img.ImageID)
+
+		cached, err := s.redis.Get(ctx, cacheKey).Result()
+		if err == nil {
+			imageResponses = append(imageResponses, dto.ProductImageResponse{
+				ImageID:     img.ImageID,
+				PicturePath: cached,
+				IsPrimary:   img.IsPrimary,
+			})
+			continue
+		}
+
+		url, err := s.minio.PresignedGetObject(
+			ctx,
+			s.bucket,
+			img.PicturePath,
+			time.Minute*5,
+			nil,
+		)
+		if err != nil {
+			log.Printf("Failed to generate presigned URL for %s: %v", img.PicturePath, err)
+			continue
+		}
+
+		presignedURL := url.String()
+		s.redis.Set(ctx, cacheKey, presignedURL, 4*time.Minute)
+
 		imageResponses = append(imageResponses, dto.ProductImageResponse{
 			ImageID:     img.ImageID,
-			PicturePath: img.PicturePath,
+			PicturePath: presignedURL,
 			IsPrimary:   img.IsPrimary,
 		})
+	}
+
+	varType, err := s.repoT.GetTypeByID(product.TypeID)
+	TypeCode := "error data"
+	TypeName := "error data"
+	if err == nil {
+		TypeCode = varType.TypeCode
+		TypeName = varType.TypeName
 	}
 
 	return &dto.ProductResponse{
@@ -240,6 +368,8 @@ func (s *productService) GetByID(productID string) (*dto.ProductResponse, error)
 		ProductSlug: product.ProductSlug,
 		WeightGram:  product.WeightGram,
 		TypeID:      product.TypeID,
+		TypeName:    TypeName,
+		TypeCode:    TypeCode,
 		Description: product.Description,
 		Status:      product.Status,
 		Images:      imageResponses,
@@ -250,27 +380,8 @@ func (s *productService) GetByID(productID string) (*dto.ProductResponse, error)
 }
 
 func (s *productService) GetAll() ([]dto.ProductResponse, error) {
-	products, err := s.repo.GetAll()
-	if err != nil {
-		return nil, &errorhandler.InternalServerError{Message: err.Error()}
-	}
 
 	var responses []dto.ProductResponse
-	for _, p := range products {
-		responses = append(responses, dto.ProductResponse{
-			ProductID:   p.ProductID,
-			ProductCode: p.ProductCode,
-			ProductName: p.ProductName,
-			ProductSlug: p.ProductSlug,
-			WeightGram:  p.WeightGram,
-			TypeID:      p.TypeID,
-			Description: p.Description,
-			Status:      p.Status,
-			Images:      []dto.ProductImageResponse{},
-			CreatedAt:   p.CreatedAt,
-			UpdatedAt:   p.UpdatedAt,
-		})
-	}
 
 	return responses, nil
 }
@@ -284,8 +395,8 @@ func (s *productService) Delete(productID string) error {
 	return s.repo.Delete(productID)
 }
 
-func (s *productService) GetAllPaginated(cursor *dto.Paginate, limit int) ([]dto.ProductListRow, *dto.Paginate, error) {
-	products, err := s.repo.GetAllProductsPaginated(cursor, limit)
+func (s *productService) GetAllPaginated(cursor *dto.Paginate, search string, limit int) ([]dto.ProductListRow, *dto.Paginate, error) {
+	products, err := s.repo.GetAllProductsPaginated(cursor, search, limit)
 	if err != nil {
 		return nil, nil, &errorhandler.InternalServerError{Message: err.Error()}
 	}

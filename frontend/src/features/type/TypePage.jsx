@@ -1,18 +1,19 @@
 import { useState } from "react";
 import { useType } from "./useType";
-import CreateTypeModal from "./CreateTypeModal";
 import Table from "../../shared/table/Table";
 import Button from "../../shared/ui/Button";
-import UpdateTypeModal from "./UpdateTypeModal";
+import UpdateTypeModal from "./components/UpdateTypeModal";
+import CreateTypeModal from "./components/CreateTypeModal";
+import SearchBar from "../../shared/ui/SearchBar";
 
 const columns = [
-  { key: "type_name", label: "Nama Tipe" },
-  { key: "type_code", label: "Kode Tipe" },
-  { key: "type_desc", label: "Deskripsi" },
+  { key: "type_name", label: "Nama Tipe", align: "left" },
+  { key: "type_code", label: "Kode Tipe", align: "left" },
+  { key: "type_desc", label: "Deskripsi", align: "left" },
 ];
 
 export default function TypePage() {
-  const { types, loading, cursorHistory, create, update, del, next, prev } = useType();
+  const { types, loading, page, hasNext, hasPrev, setSearch, create, update, del, next, prev } = useType();
   const [showCreate, setShowCreate] = useState(false);
   const [showUpdate, setShowUpdate] = useState(false);
   const [selectedRow, setSelectedRow] = useState(null);
@@ -33,9 +34,22 @@ export default function TypePage() {
 
   return (
     <div className="p-6">
-      <div className="flex justify-between items-center mb-4">
-        <h1 className="text-lg font-semibold text-gray-800">Tipe</h1>
-        <Button onClick={() => setShowCreate(true)}>+ Tambah</Button>
+      
+      <div className="mb-4">
+        <div className="flex justify-between items-center">
+          <div className="w-72">
+            <SearchBar
+              placeholder="Cari tipe..."
+              onChange={(value) => {
+                setSearch(value);
+              }}
+            />
+          </div>
+
+          <Button onClick={() => setShowCreate(true)}>
+            + Tambah
+          </Button>
+        </div>
       </div>
 
       <Table
@@ -50,13 +64,13 @@ export default function TypePage() {
       />
 
       <div className="flex items-center justify-end gap-2 mt-4">
-        <Button variant="secondary" onClick={prev} disabled={loading}>
+        <Button variant="secondary" onClick={prev} disabled={loading||!hasPrev}>
           Prev
         </Button>
         <span className="text-sm text-gray-500">
-            Page {cursorHistory.length + 1}
+            Page {page} 
         </span>
-        <Button variant="secondary" onClick={next} disabled={loading}>
+        <Button variant="secondary" onClick={next} disabled={loading||!hasNext}>
           Next
         </Button>
       </div>

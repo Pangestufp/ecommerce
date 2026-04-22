@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"net/http"
-	"strconv"
 	"sync"
 	"time"
 
@@ -46,10 +45,10 @@ func (rl *RateLimiter) cleanupVisitors() {
 
 func (rl *RateLimiter) Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		key := "ip:" + c.ClientIP()
+		key := c.FullPath() + ":" + c.ClientIP()
 		if userID, exists := c.Get("user_id"); exists {
-			if id, ok := userID.(int); ok {
-				key = "user:" + strconv.Itoa(id)
+			if id, ok := userID.(string); ok {
+				key = "user:" + id
 			}
 		}
 

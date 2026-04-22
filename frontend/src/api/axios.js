@@ -33,7 +33,7 @@ api.interceptors.response.use(
 
     const message =
       error.response?.data?.message ||
-      error.response?.data?.StatusCode ||
+      error.response?.data?.status_code ||
       "Something went wrong"
 
     return Promise.reject(new Error(message))

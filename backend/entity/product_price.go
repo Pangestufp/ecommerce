@@ -7,4 +7,6 @@ type ProductPrice struct {
 	ProductID    string
 	ProductPrice float64
 	CreatedAt    time.Time
+	CreatedBy    string
+	CreatedName  string
 }

@@ -14,7 +14,9 @@ import (
 func DiscountRouter(api *gin.RouterGroup) {
 	DiscountRepository := repository.NewDiscountRepository(config.DB)
 	ProductRepository := repository.NewProductRepository(config.DB)
-	DiscountService := service.NewDiscountService(DiscountRepository, ProductRepository)
+	UserRepository := repository.NewUserRepository(config.DB)
+	ProductPriceRepository := repository.NewProductPriceRepository(config.DB)
+	DiscountService := service.NewDiscountService(DiscountRepository, ProductRepository, UserRepository, ProductPriceRepository, config.RedisClient)
 	DiscountHandler := handler.NewDiscountHandler(DiscountService)
 
 	Discount := api.Group("/discount")
@@ -23,4 +25,9 @@ func DiscountRouter(api *gin.RouterGroup) {
 
 	Discount.POST("", middleware.RoleMiddleware(helper.Admin()), DiscountHandler.Create)
 	Discount.DELETE("/:id", middleware.RoleMiddleware(helper.Admin()), DiscountHandler.Delete)
+	Discount.GET("/:id", DiscountHandler.GetAll)
+
+	DiscountType := api.Group("/discountType")
+	DiscountType.Use(middleware.JWTMiddleware())
+	DiscountType.GET("", DiscountHandler.GetAllDiscountType)
 }

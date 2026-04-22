@@ -6,6 +6,7 @@ import (
 	"backend/helper"
 	"backend/service"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -19,13 +20,29 @@ func NewInventoryHandler(service service.InventoryService) *inventoryHandler {
 }
 
 func (h *inventoryHandler) Create(c *gin.Context) {
+	userIDVal, ok := c.Get("userID")
+	if !ok {
+		errorhandler.ErrorHandler(c, &errorhandler.UnauthorizedError{
+			Message: "unauthorized",
+		})
+		return
+	}
+	userID, ok := userIDVal.(string)
+
+	if !ok {
+		errorhandler.ErrorHandler(c, &errorhandler.InternalServerError{
+			Message: "invalid user id",
+		})
+		return
+	}
+
 	var req dto.CreateInventoryRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		errorhandler.ErrorHandler(c, &errorhandler.BadRequestError{Message: err.Error()})
 		return
 	}
 
-	data, err := h.service.Create(&req)
+	data, err := h.service.Create(&req, userID)
 	if err != nil {
 		errorhandler.ErrorHandler(c, err)
 		return
@@ -39,6 +56,22 @@ func (h *inventoryHandler) Create(c *gin.Context) {
 }
 
 func (h *inventoryHandler) Update(c *gin.Context) {
+	userIDVal, ok := c.Get("userID")
+	if !ok {
+		errorhandler.ErrorHandler(c, &errorhandler.UnauthorizedError{
+			Message: "unauthorized",
+		})
+		return
+	}
+	userID, ok := userIDVal.(string)
+
+	if !ok {
+		errorhandler.ErrorHandler(c, &errorhandler.InternalServerError{
+			Message: "invalid user id",
+		})
+		return
+	}
+
 	batchID := c.Param("id")
 
 	var req dto.UpdateInventoryRequest
@@ -47,7 +80,7 @@ func (h *inventoryHandler) Update(c *gin.Context) {
 		return
 	}
 
-	data, err := h.service.Update(batchID, &req)
+	data, err := h.service.Update(batchID, &req, userID)
 	if err != nil {
 		errorhandler.ErrorHandler(c, err)
 		return
@@ -60,10 +93,38 @@ func (h *inventoryHandler) Update(c *gin.Context) {
 	}))
 }
 
-func (h *inventoryHandler) GetAllByProduct(c *gin.Context) {
+func (h *inventoryHandler) GetAll(c *gin.Context) {
 	productID := c.Param("id")
 
-	data, err := h.service.GetAllByProductID(productID)
+	direction := c.Query("direction")
+	cursorID := c.Query("id")
+	createdAt := c.Query("created_at")
+	search := c.Query("search")
+
+	limit := 5
+	var cursor *dto.Paginate
+
+	if cursorID != "" && createdAt != "" {
+		t, err := time.Parse(time.RFC3339, createdAt)
+		if err != nil {
+			c.JSON(400, dto.ResponseParam{StatusCode: 400, Message: "invalid created_at format"})
+			return
+		}
+
+		cursor = &dto.Paginate{}
+		if direction == "prev" {
+			cursor.Direction = &direction
+			cursor.FirstID = &cursorID
+			cursor.FirstCreatedAt = &t
+		} else {
+			dirNext := "next"
+			cursor.Direction = &dirNext
+			cursor.LastID = &cursorID
+			cursor.LastCreatedAt = &t
+		}
+	}
+
+	data, paginate, err := h.service.GetAllByProductID(productID, cursor, search, limit)
 	if err != nil {
 		errorhandler.ErrorHandler(c, err)
 		return
@@ -72,6 +133,7 @@ func (h *inventoryHandler) GetAllByProduct(c *gin.Context) {
 	c.JSON(http.StatusOK, helper.BuildResponse(dto.ResponseParam{
 		StatusCode: http.StatusOK,
 		Message:    "Success",
+		Paginate:   paginate,
 		Data:       data,
 	}))
 }

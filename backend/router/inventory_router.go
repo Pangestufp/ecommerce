@@ -14,7 +14,8 @@ import (
 func InventoryRouter(api *gin.RouterGroup) {
 	InventoryRepository := repository.NewInventoryRepository(config.DB)
 	ProductRepository := repository.NewProductRepository(config.DB)
-	InventoryService := service.NewInventoryService(InventoryRepository, ProductRepository, config.RedisClient)
+	UserRepository := repository.NewUserRepository(config.DB)
+	InventoryService := service.NewInventoryService(InventoryRepository, ProductRepository, UserRepository, config.RedisClient)
 	InventoryHandler := handler.NewInventoryHandler(InventoryService)
 
 	Inventory := api.Group("/inventory")
@@ -22,6 +23,6 @@ func InventoryRouter(api *gin.RouterGroup) {
 	Inventory.Use(middleware.JWTMiddleware())
 
 	Inventory.POST("", middleware.RoleMiddleware(helper.Admin()), InventoryHandler.Create)
-	Inventory.GET("/:id", InventoryHandler.GetAllByProduct)
+	Inventory.GET("/:id", InventoryHandler.GetAll)
 	Inventory.PUT("/:id", middleware.RoleMiddleware(helper.Admin()), InventoryHandler.Update)
 }

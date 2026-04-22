@@ -10,6 +10,8 @@ type Discount struct {
 	DiscountValue float64
 	StartAt       time.Time
 	ExpiredAt     time.Time
+	CreatedBy     string
+	CreatedName   string
 	Status        int
 	CreatedAt     time.Time
 }

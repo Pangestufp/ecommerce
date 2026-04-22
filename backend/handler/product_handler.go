@@ -122,13 +122,19 @@ func (h *ProductHandler) Delete(c *gin.Context) {
 }
 
 func (h *ProductHandler) GetAllPaginated(c *gin.Context) {
-	limit := 5
-
-	var cursor *dto.Paginate
-
 	direction := c.Query("direction")
 	id := c.Query("id")
 	createdAt := c.Query("created_at")
+	search := c.Query("search")
+
+	if id == "" && createdAt == "" && direction == "" {
+		errorhandler.ErrorHandler(c, &errorhandler.BadRequestError{Message: "Invalid direction format"})
+		return
+	}
+
+	limit := 5
+
+	var cursor *dto.Paginate
 
 	if id != "" && createdAt != "" {
 		t, err := time.Parse(time.RFC3339, createdAt)
@@ -154,7 +160,7 @@ func (h *ProductHandler) GetAllPaginated(c *gin.Context) {
 		}
 	}
 
-	products, paginate, err := h.service.GetAllPaginated(cursor, limit)
+	products, paginate, err := h.service.GetAllPaginated(cursor, search, limit)
 	if err != nil {
 		errorhandler.ErrorHandler(c, err)
 		return

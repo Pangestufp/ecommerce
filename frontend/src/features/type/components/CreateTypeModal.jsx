@@ -1,6 +1,7 @@
 import { useState } from "react"
-import TextField from "../../shared/ui/TextField"
-import Button from "../../shared/ui/Button"
+import TextField from "../../../shared/ui/TextField"
+import Button from "../../../shared/ui/Button"
+import Textarea from "../../../shared/ui/TextArea"
 
 export default function CreateTypeModal({ onSubmit, onClose, loading }) {
   const [form, setForm] = useState({
@@ -39,12 +40,13 @@ export default function CreateTypeModal({ onSubmit, onClose, loading }) {
             value={form.type_name}
             onChange={handleChange}
           />
-          <TextField
+          <Textarea
             label="Deskripsi"
             name="type_desc"
             placeholder="Masukkan deskripsi tipe"
             value={form.type_desc}
             onChange={handleChange}
+            rows={4}
           />
 
           <div className="flex justify-end gap-2 mt-2">

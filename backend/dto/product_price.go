@@ -3,8 +3,8 @@ package dto
 import "time"
 
 type CreateProductPriceRequest struct {
-	ProductID    string  `json:"product_id" binding:"required"`
-	ProductPrice float64 `json:"product_price" binding:"required"`
+	ProductID    string  `json:"product_id"`
+	ProductPrice float64 `json:"product_price"`
 }
 
 type ProductPriceResponse struct {
@@ -12,4 +12,6 @@ type ProductPriceResponse struct {
 	ProductID    string    `json:"product_id"`
 	ProductPrice float64   `json:"product_price"`
 	CreatedAt    time.Time `json:"created_at"`
+	CreatedBy    string    `json:"created_by"`
+	CreatedName  string    `json:"created_name"`
 }

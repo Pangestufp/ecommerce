@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import ApiType from "./apiType";
 import { useModal } from "../../shared/modal/ModalContext";
 
@@ -12,8 +12,11 @@ export function useType() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [types, setTypes] = useState([]);
-  const [cursorHistory, setCursorHistory] = useState([]);
-  const [nextCursor, setNextCursor] = useState({ id: "", createdAt: "" });
+  const [paginate, setPaginate] = useState(null);
+  const [page, setPage] = useState(1);
+  const [hasNext, setHasNext] = useState(true);
+  const [hasPrev, setHasPrev] = useState(false);
+  const [searchPara, setSearchPara] = useState("");
 
   const create = async (payload) => {
     setLoading(true);
@@ -23,6 +26,7 @@ export function useType() {
     try {
       const res = await ApiType.create(payload);
       setTypes((prev) => [res.data.data, ...prev]);
+      fetchFirstPage(searchPara);
       await modalSuccess("Tipe berhasil dibuat");
     } catch (err) {
       await modalError(err.message);
@@ -45,6 +49,7 @@ export function useType() {
       setTypes((prev) =>
         prev.map((t) => (t.type_id === id ? res.data.data : t)),
       );
+      fetchFirstPage(searchPara)
       await modalSuccess("Tipe berhasil diubah");
     } catch (err) {
       await modalError(err.message);
@@ -76,28 +81,25 @@ export function useType() {
   };
 
   const next = async () => {
-    console.log("ini next");
-    console.log(cursorHistory);
+    if (paginate.has_next === "false") return;
 
     const closeLoading = modalLoading("Loading...");
     setLoading(true);
     setError(null);
-
     try {
-      const cursorBefore = nextCursor;
-      const res = await ApiType.getAll(
-        nextCursor.id,
-        nextCursor.createdAt,
+      const res = await ApiType.getAllPaginate(
+        paginate.last_id,
+        paginate.last_created_at,
+        "next",
+        searchPara
       );
+      setTypes(res.data.data);
+      setPaginate(res.data.paginate);
+      setPage(prev => prev + 1)
 
-      if (res.data.data.length > 0) {
-        setCursorHistory((prev) => [...prev, cursorBefore]);
-        setNextCursor({
-          id: res.data.paginate.last_id,
-          createdAt: res.data.paginate.last_created_at,
-        });
-        setTypes(res.data.data);
-      }
+      setHasNext(res.data.paginate.has_next === "true")
+      setHasPrev(res.data.paginate.has_prev === "true")
+
     } catch (err) {
       await modalError(err.message);
       throw err;
@@ -108,31 +110,25 @@ export function useType() {
   };
 
   const prev = async () => {
-    if (cursorHistory.length === 0) return;
-    console.log("ini prev");
-    console.log(cursorHistory);
+    if (paginate.has_prev === "false") return;
 
     const closeLoading = modalLoading("Loading...");
     setLoading(true);
     setError(null);
     try {
-      const history = [...cursorHistory];
-      history.pop();
-      const fetchCursor =
-        history.length > 0
-          ? history[history.length - 1]
-          : { id: "", createdAt: "" };
+      const res = await ApiType.getAllPaginate(
+        paginate.first_id,
+        paginate.first_created_at,
+        "prev",
+        searchPara
+      );
+      setTypes(res.data.data);
+      setPaginate(res.data.paginate);
+      setPage(prev => prev - 1)
+      
+      setHasNext(res.data.paginate.has_next === "true")
+      setHasPrev(res.data.paginate.has_prev === "true")
 
-      const res = await ApiType.getAll(fetchCursor.id, fetchCursor.createdAt);
-
-      if (res.data.data.length > 0) {
-        setCursorHistory(history);
-        setNextCursor({
-          id: res.data.paginate.last_id,
-          createdAt: res.data.paginate.last_created_at,
-        });
-        setTypes(res.data.data);
-      }
     } catch (err) {
       await modalError(err.message);
       throw err;
@@ -141,31 +137,49 @@ export function useType() {
       closeLoading();
     }
   };
-
-  const fetch = async () => {
-    const closeLoading = modalLoading("Loading...");
+  
+  const fetchFirstPage = async (value) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await ApiType.getAll("", "");
-      if (res.data.data.length > 0) {
-        setNextCursor({
-          id: res.data.paginate.last_id,
-          createdAt: res.data.paginate.last_created_at,
-        });
-        setTypes(res.data.data);
+      const res = await ApiType.getAllPaginate(
+        "","","next", value
+      );
+
+      setTypes(res.data.data);
+
+      if(res.data.data.length>0){
+
+        setPaginate(res.data.paginate);
+        setPage(1);
+
+        setHasNext(res.data.paginate.has_next === "true")
+        setHasPrev(res.data.paginate.has_prev === "true")
+      }else{
+        await modalError("Data ("+value+") tidak ditemukan");
+        setHasNext(false)
+        setHasPrev(false)
       }
+
     } catch (err) {
       await modalError(err.message);
     } finally {
       setLoading(false);
-      closeLoading();
     }
   };
 
-  useEffect(() => {
-    fetch();
+
+  const setSearch = useCallback((value) => {
+    setSearchPara(value);
+    if (value.length >= 2 || value === "") {
+        fetchFirstPage(value);
+    }
   }, []);
 
-  return { create, next, prev, update, del, cursorHistory, types, loading, error };
+
+  useEffect(() => {
+    fetchFirstPage("");
+  }, []);
+
+  return { create, next, prev, update, del, setSearch, hasNext, hasPrev, page, types, loading, error };
 }

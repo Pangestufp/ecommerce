@@ -13,7 +13,8 @@ import (
 
 func ProductRouter(api *gin.RouterGroup) {
 	ProductRepository := repository.NewProductRepository(config.DB)
-	ProductService := service.NewProductService(ProductRepository, config.MinioClient, config.RedisClient, config.ENV.MinioBucket)
+	TypeRepository := repository.NewTypeRepository(config.DB)
+	ProductService := service.NewProductService(ProductRepository, TypeRepository, config.MinioClient, config.RedisClient, config.ENV.MinioBucket)
 	ProductHandler := handler.NewProductHandler(ProductService)
 
 	Product := api.Group("/product")
