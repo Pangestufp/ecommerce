@@ -156,7 +156,9 @@ export function useType() {
         setHasNext(res.data.paginate.has_next === "true")
         setHasPrev(res.data.paginate.has_prev === "true")
       }else{
+        if (value !="") {
         await modalError("Data ("+value+") tidak ditemukan");
+        }
         setHasNext(false)
         setHasPrev(false)
       }
