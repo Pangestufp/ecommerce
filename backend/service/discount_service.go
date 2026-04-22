@@ -6,6 +6,7 @@ import (
 	"backend/errorhandler"
 	"backend/helper"
 	"backend/repository"
+	"backend/server"
 	"context"
 	"fmt"
 	"time"
@@ -102,6 +103,13 @@ func (s *discountService) Create(req *dto.CreateDiscountRequest, userID string) 
 		return nil, &errorhandler.InternalServerError{Message: err.Error()}
 	}
 
+	go func() {
+		server.Instance.ProductEventChan <- &dto.ProductEvent{
+			ProductID: req.ProductID,
+			Type:      "create discount",
+		}
+	}()
+
 	formatFlag := true
 	if priceErr != nil {
 		formatFlag = false
@@ -170,6 +178,13 @@ func (s *discountService) Delete(discountID string) error {
 	ctx := context.Background()
 	cacheKey := fmt.Sprintf("ProductDiscount:%s", discount.ProductID)
 	s.redis.Del(ctx, cacheKey)
+
+	go func() {
+		server.Instance.ProductEventChan <- &dto.ProductEvent{
+			ProductID: discount.ProductID,
+			Type:      "delete discount",
+		}
+	}()
 
 	return s.repository.Delete(discountID)
 }

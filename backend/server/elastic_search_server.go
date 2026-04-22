@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/elastic/go-elasticsearch/v8"
@@ -28,19 +29,25 @@ type ElasticSearchServer struct {
 	redis            *redis.Client
 }
 
-var Instance *ElasticSearchServer
+var (
+	Instance *ElasticSearchServer
+	once     sync.Once
+)
 
 func Initialize(db *gorm.DB) {
-	Instance = &ElasticSearchServer{
-		DB:               db,
-		ESClient:         config.ESClient,
-		ProductEventChan: make(chan *dto.ProductEvent, 100),
-		ProductRepo:      repository.NewProductRepository(db),
-		MinioClient:      config.MinioClient,
-		bucket:           config.ENV.MinioBucket,
-		redis:            config.RedisClient,
-	}
-	Instance.startESWriter()
+	once.Do(func() {
+
+		Instance = &ElasticSearchServer{
+			DB:               db,
+			ESClient:         config.ESClient,
+			ProductEventChan: make(chan *dto.ProductEvent, 100),
+			ProductRepo:      repository.NewProductRepository(db),
+			MinioClient:      config.MinioClient,
+			bucket:           config.ENV.MinioBucket,
+			redis:            config.RedisClient,
+		}
+		Instance.startESWriter()
+	})
 }
 
 func (s *ElasticSearchServer) startESWriter() {

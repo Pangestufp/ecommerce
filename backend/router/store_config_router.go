@@ -16,7 +16,7 @@ func StoreConfigRouter(api *gin.RouterGroup) {
 	StoreConfigService := service.NewStoreConfigService(StoreConfigRepository, config.RedisClient)
 	StoreConfigHandler := handler.NewStoreConfigHandler(StoreConfigService)
 
-	StoreConfig := api.Group("/storeConfig")
+	StoreConfig := api.Group("/store-config")
 
 	StoreConfig.Use(middleware.JWTMiddleware())
 

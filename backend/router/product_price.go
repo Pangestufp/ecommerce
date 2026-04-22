@@ -18,7 +18,7 @@ func ProductPriceRouter(api *gin.RouterGroup) {
 	ProductPriceService := service.NewProductPriceService(ProductPriceRepository, ProductRepository, UserRepository, config.RedisClient)
 	ProductPriceHandler := handler.NewProductPriceHandler(ProductPriceService)
 
-	ProductPrice := api.Group("/productPrice")
+	ProductPrice := api.Group("/product-price")
 
 	ProductPrice.Use(middleware.JWTMiddleware())
 

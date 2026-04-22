@@ -4,6 +4,7 @@ import (
 	"backend/config"
 	"backend/middleware"
 	"backend/router"
+	"backend/server"
 	"fmt"
 	"log"
 	"net/http"
@@ -21,6 +22,8 @@ func main() {
 
 	config.ConnectMinio()
 
+	config.ConnectElasticsearch()
+
 	r := gin.Default()
 
 	rl := middleware.NewRateLimiter(60, time.Minute)
@@ -36,6 +39,8 @@ func main() {
 	router.ProductPriceRouter(api)
 	router.DiscountRouter(api)
 	router.InventoryRouter(api)
+
+	server.Initialize(config.DB)
 
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%v", config.ENV.Port),

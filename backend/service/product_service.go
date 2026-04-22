@@ -6,6 +6,7 @@ import (
 	"backend/errorhandler"
 	"backend/helper"
 	"backend/repository"
+	"backend/server"
 	"context"
 	"fmt"
 	"log"
@@ -28,6 +29,7 @@ type ProductService interface {
 	GetAll() ([]dto.ProductResponse, error)
 	Delete(productID string) error
 	GetAllPaginated(cursor *dto.Paginate, search string, limit int) ([]dto.ProductListRow, *dto.Paginate, error)
+	GetProductBySearch(search string) ([]*dto.ProductEnrichedForES, error)
 }
 
 type productService struct {
@@ -212,13 +214,17 @@ func (s *productService) Create(req dto.CreateProductRequest) (*dto.ProductRespo
 
 		images, errs := s.buildImages(product.ProductID, req.Images)
 		if len(errs) > 0 {
-			//successImages := len(images)
 			log.Println("error ", len(errs))
 			// send only successImages of len(req.Images) saved
 		}
 
 		if len(images) > 0 {
 			s.repo.CreateProductImages(images)
+		}
+
+		server.Instance.ProductEventChan <- &dto.ProductEvent{
+			ProductID: product.ProductID,
+			Type:      "create product",
 		}
 
 	}()
@@ -294,6 +300,11 @@ func (s *productService) Update(productID string, req dto.UpdateProductRequest) 
 
 			if len(images) > 0 {
 				s.repo.CreateProductImages(images)
+			}
+
+			server.Instance.ProductEventChan <- &dto.ProductEvent{
+				ProductID: product.ProductID,
+				Type:      "Update product",
 			}
 
 			//jangan lupa sini rewrite
@@ -392,6 +403,13 @@ func (s *productService) Delete(productID string) error {
 		return &errorhandler.NotFoundError{Message: "product not found"}
 	}
 
+	go func() {
+		server.Instance.ProductEventChan <- &dto.ProductEvent{
+			ProductID: productID,
+			Type:      "create product price",
+		}
+	}()
+
 	return s.repo.Delete(productID)
 }
 
@@ -444,4 +462,20 @@ func (s *productService) GetAllPaginated(cursor *dto.Paginate, search string, li
 	}
 
 	return products, paginate, nil
+}
+
+func (s *productService) GetProductBySearch(search string) ([]*dto.ProductEnrichedForES, error) {
+
+	var products []*dto.ProductEnrichedForES
+	var err error
+
+	clean := strings.TrimSpace(search)
+
+	if clean == "" {
+		products, err = server.Instance.GetAllProducts()
+	} else {
+		products, err = server.Instance.SearchProducts(search)
+	}
+
+	return products, err
 }

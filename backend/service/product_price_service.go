@@ -6,6 +6,7 @@ import (
 	"backend/errorhandler"
 	"backend/helper"
 	"backend/repository"
+	"backend/server"
 	"context"
 	"fmt"
 
@@ -57,6 +58,13 @@ func (s *productPriceService) Create(req *dto.CreateProductPriceRequest, userID 
 	if err := s.repository.Create(&price); err != nil {
 		return nil, &errorhandler.InternalServerError{Message: err.Error()}
 	}
+
+	go func() {
+		server.Instance.ProductEventChan <- &dto.ProductEvent{
+			ProductID: req.ProductID,
+			Type:      "create product price",
+		}
+	}()
 
 	ctx := context.Background()
 	cacheKey := fmt.Sprintf("ProductPrice:%s", price.ProductID)

@@ -21,10 +21,14 @@ func ProductRouter(api *gin.RouterGroup) {
 
 	Product.Use(middleware.JWTMiddleware())
 
-	Product.POST("/GeneratePresignedURLs", middleware.RoleMiddleware([]string{helper.Admin()}), ProductHandler.GeneratePresignedURLs)
+	Product.POST("/presigned-urls", middleware.RoleMiddleware([]string{helper.Admin()}), ProductHandler.GeneratePresignedURLs)
 	Product.POST("", middleware.RoleMiddleware([]string{helper.Admin()}), ProductHandler.Create)
 	Product.GET("", ProductHandler.GetAllPaginated)
 	Product.GET("/:id", ProductHandler.GetByID)
 	Product.PUT("/:id", middleware.RoleMiddleware([]string{helper.Admin()}), ProductHandler.Update)
 	Product.DELETE("/:id", middleware.RoleMiddleware([]string{helper.Admin()}), ProductHandler.Delete)
+
+	ProductSearch := api.Group("/product-search")
+	ProductSearch.Use(middleware.JWTMiddleware())
+	ProductSearch.GET("", ProductHandler.GetProductBySearch)
 }

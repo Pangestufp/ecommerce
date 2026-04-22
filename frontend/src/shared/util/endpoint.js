@@ -22,12 +22,12 @@ class Endpoints {
     UPDATE: (id) => `/api/product/${id}`,
     DELETE: (id) => `/api/product/${id}`,
     CREATE: `/api/product`,
-    GENERATE: `/api/product/GeneratePresignedURLs`,
+    GENERATE: `/api/product/presigned-urls`,
   };
 
   static PRODUCTPRICE = {
-    GET_ALL_PAGINATE: (productID, id, createAt, direction) =>`/api/productPrice/${productID}?id=${id}&created_at=${createAt}&direction=${direction}`,
-    CREATE: `/api/productPrice`,
+    GET_ALL_PAGINATE: (productID, id, createAt, direction) =>`/api/product-price/${productID}?id=${id}&created_at=${createAt}&direction=${direction}`,
+    CREATE: `/api/product-price`,
   };
 
   static PRODUCTDISCOUNT = {
@@ -43,7 +43,7 @@ class Endpoints {
   };
 
   static DISCOUNTTYPE = {
-      GET_ALL: () => `/api/discountType`,
+      GET_ALL: () => `/api/discount-type`,
   }
 
 }

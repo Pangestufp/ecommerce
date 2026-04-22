@@ -6,6 +6,7 @@ import (
 	"backend/errorhandler"
 	"backend/helper"
 	"backend/repository"
+	"backend/server"
 	"context"
 	"fmt"
 
@@ -76,6 +77,13 @@ func (s *inventoryService) Create(req *dto.CreateInventoryRequest, userID string
 		return nil, &errorhandler.InternalServerError{Message: err.Error()}
 	}
 
+	go func() {
+		server.Instance.ProductEventChan <- &dto.ProductEvent{
+			ProductID: req.ProductID,
+			Type:      "Create batch",
+		}
+	}()
+
 	ctx := context.Background()
 	cacheKey := fmt.Sprintf("inventory:%s", inv.ProductID)
 	s.redis.Del(ctx, cacheKey)
@@ -118,6 +126,13 @@ func (s *inventoryService) Update(batchID string, req *dto.UpdateInventoryReques
 	if err := s.repository.Update(inv, userID, user.Name); err != nil {
 		return nil, &errorhandler.InternalServerError{Message: err.Error()}
 	}
+
+	go func() {
+		server.Instance.ProductEventChan <- &dto.ProductEvent{
+			ProductID: inv.ProductID,
+			Type:      "Update batch",
+		}
+	}()
 
 	ctx := context.Background()
 	cacheKey := fmt.Sprintf("inventory:%s", inv.ProductID)

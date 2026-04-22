@@ -173,3 +173,19 @@ func (h *ProductHandler) GetAllPaginated(c *gin.Context) {
 		Data:       products,
 	})
 }
+
+func (h *ProductHandler) GetProductBySearch(c *gin.Context) {
+	search := c.Query("search")
+
+	products, err := h.service.GetProductBySearch(search)
+	if err != nil {
+		errorhandler.ErrorHandler(c, err)
+		return
+	}
+
+	c.JSON(200, dto.ResponseParam{
+		StatusCode: 200,
+		Message:    "success",
+		Data:       products,
+	})
+}
