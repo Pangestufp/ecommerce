@@ -23,8 +23,8 @@ func DiscountRouter(api *gin.RouterGroup) {
 
 	Discount.Use(middleware.JWTMiddleware())
 
-	Discount.POST("", middleware.RoleMiddleware(helper.Admin()), DiscountHandler.Create)
-	Discount.DELETE("/:id", middleware.RoleMiddleware(helper.Admin()), DiscountHandler.Delete)
+	Discount.POST("", middleware.RoleMiddleware([]string{helper.Admin()}), DiscountHandler.Create)
+	Discount.DELETE("/:id", middleware.RoleMiddleware([]string{helper.Admin()}), DiscountHandler.Delete)
 	Discount.GET("/:id", DiscountHandler.GetAll)
 
 	DiscountType := api.Group("/discountType")

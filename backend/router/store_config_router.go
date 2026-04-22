@@ -20,7 +20,7 @@ func StoreConfigRouter(api *gin.RouterGroup) {
 
 	StoreConfig.Use(middleware.JWTMiddleware())
 
-	StoreConfig.PUT("", middleware.RoleMiddleware(helper.Admin()), StoreConfigHandler.Upsert)
+	StoreConfig.PUT("", middleware.RoleMiddleware([]string{helper.Admin()}), StoreConfigHandler.Upsert)
 	StoreConfig.GET("", StoreConfigHandler.GetConfig)
 
 }

@@ -20,9 +20,9 @@ func TypeRouter(api *gin.RouterGroup) {
 
 	Type.Use(middleware.JWTMiddleware())
 
-	Type.POST("", middleware.RoleMiddleware(helper.Admin()), TypeHandler.Create)
+	Type.POST("", middleware.RoleMiddleware([]string{helper.Admin()}), TypeHandler.Create)
 	Type.GET("", TypeHandler.GetAll)
 	Type.GET("/:id", TypeHandler.GetByID)
-	Type.PUT("/:id", middleware.RoleMiddleware(helper.Admin()), TypeHandler.Update)
-	Type.DELETE("/:id", middleware.RoleMiddleware(helper.Admin()), TypeHandler.Delete)
+	Type.PUT("/:id", middleware.RoleMiddleware([]string{helper.Admin()}), TypeHandler.Update)
+	Type.DELETE("/:id", middleware.RoleMiddleware([]string{helper.Admin()}), TypeHandler.Delete)
 }

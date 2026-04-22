@@ -6,7 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func RoleMiddleware(role string) gin.HandlerFunc {
+func RoleMiddleware(roles []string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		roleVal, exists := c.Get("role")
 		if !exists {
@@ -15,9 +15,18 @@ func RoleMiddleware(role string) gin.HandlerFunc {
 			return
 		}
 
-		if roleVal == role {
-			c.Next()
+		role, ok := roleVal.(string)
+		if !ok {
+			errorhandler.ErrorHandler(c, &errorhandler.ForbiddenError{Message: "You cannot access this API"})
+			c.Abort()
 			return
+		}
+
+		for _, r := range roles {
+			if r == role {
+				c.Next()
+				return
+			}
 		}
 
 		errorhandler.ErrorHandler(c, &errorhandler.ForbiddenError{Message: "You cannot access this API"})

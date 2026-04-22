@@ -22,6 +22,6 @@ func ProductPriceRouter(api *gin.RouterGroup) {
 
 	ProductPrice.Use(middleware.JWTMiddleware())
 
-	ProductPrice.POST("", middleware.RoleMiddleware(helper.Admin()), ProductPriceHandler.Create)
+	ProductPrice.POST("", middleware.RoleMiddleware([]string{helper.Admin()}), ProductPriceHandler.Create)
 	ProductPrice.GET("/:id", ProductPriceHandler.GetAll)
 }

@@ -22,7 +22,7 @@ func InventoryRouter(api *gin.RouterGroup) {
 
 	Inventory.Use(middleware.JWTMiddleware())
 
-	Inventory.POST("", middleware.RoleMiddleware(helper.Admin()), InventoryHandler.Create)
+	Inventory.POST("", middleware.RoleMiddleware([]string{helper.Admin()}), InventoryHandler.Create)
 	Inventory.GET("/:id", InventoryHandler.GetAll)
-	Inventory.PUT("/:id", middleware.RoleMiddleware(helper.Admin()), InventoryHandler.Update)
+	Inventory.PUT("/:id", middleware.RoleMiddleware([]string{helper.Admin()}), InventoryHandler.Update)
 }
