@@ -29,19 +29,28 @@ type ProductService interface {
 	GetAll() ([]dto.ProductResponse, error)
 	Delete(productID string) error
 	GetAllPaginated(cursor *dto.Paginate, search string, limit int) ([]dto.ProductListRow, *dto.Paginate, error)
-	GetProductBySearch(search string) ([]*dto.ProductEnrichedForES, error)
+	GetProductBySearch(search string, page, limit int) ([]*dto.ProductEnrichedForES, error)
+	GetProductEnrichedBySlug(slug string) (*dto.ProductEnrichedForES, error)
 }
 
 type productService struct {
 	repo   repository.ProductRepository
 	repoT  repository.TypeRepository
+	repoD  repository.DiscountRepository
 	minio  *minio.Client
 	redis  *redis.Client
 	bucket string
 }
 
-func NewProductService(repo repository.ProductRepository, repoT repository.TypeRepository, minio *minio.Client, redis *redis.Client, bucket string) *productService {
-	return &productService{repo: repo, repoT: repoT, minio: minio, redis: redis, bucket: bucket}
+func NewProductService(repo repository.ProductRepository, repoT repository.TypeRepository, repoD repository.DiscountRepository, minio *minio.Client, redis *redis.Client, bucket string) *productService {
+	return &productService{
+		repo:   repo,
+		repoT:  repoT,
+		repoD:  repoD,
+		minio:  minio,
+		redis:  redis,
+		bucket: bucket,
+	}
 }
 
 func (s *productService) GeneratePresignedURLs(req dto.PresignedURLRequest) (*dto.PresignedURLResponse, error) {
@@ -464,18 +473,80 @@ func (s *productService) GetAllPaginated(cursor *dto.Paginate, search string, li
 	return products, paginate, nil
 }
 
-func (s *productService) GetProductBySearch(search string) ([]*dto.ProductEnrichedForES, error) {
+func (s *productService) GetProductBySearch(search string, page, limit int) ([]*dto.ProductEnrichedForES, error) {
 
 	var products []*dto.ProductEnrichedForES
 	var err error
 
 	clean := strings.TrimSpace(search)
+	from := (page - 1) * limit
 
 	if clean == "" {
-		products, err = server.Instance.GetAllProducts()
+		products, err = server.Instance.GetAllProducts(from, limit)
 	} else {
-		products, err = server.Instance.SearchProducts(search)
+		products, err = server.Instance.SearchProducts(search, from, limit)
 	}
 
 	return products, err
+}
+
+func (s *productService) GetProductEnrichedBySlug(slug string) (*dto.ProductEnrichedForES, error) {
+	product, err := s.repo.GetProductByProductSlug(slug)
+	if err != nil {
+		return nil, &errorhandler.BadRequestError{Message: "data tidak ditemukan"}
+	}
+
+	images, err := s.repo.GetProductImageByProductID(product.ProductID)
+	if err != nil {
+		images = []entity.ProductImage{}
+	}
+
+	var imageResponses []dto.ProductImageResponse
+
+	ctx := context.Background()
+
+	for _, img := range images {
+		cacheKey := fmt.Sprintf("image:%s", img.ImageID)
+
+		cached, err := s.redis.Get(ctx, cacheKey).Result()
+		if err == nil {
+			imageResponses = append(imageResponses, dto.ProductImageResponse{
+				ImageID:     img.ImageID,
+				PicturePath: cached,
+				IsPrimary:   img.IsPrimary,
+			})
+			continue
+		}
+
+		url, err := s.minio.PresignedGetObject(
+			ctx,
+			s.bucket,
+			img.PicturePath,
+			time.Minute*5,
+			nil,
+		)
+		if err != nil {
+			log.Printf("Failed to generate presigned URL for %s: %v", img.PicturePath, err)
+			continue
+		}
+
+		presignedURL := url.String()
+		s.redis.Set(ctx, cacheKey, presignedURL, 4*time.Minute)
+
+		imageResponses = append(imageResponses, dto.ProductImageResponse{
+			ImageID:     img.ImageID,
+			PicturePath: presignedURL,
+			IsPrimary:   img.IsPrimary,
+		})
+	}
+
+	enrichedproduct, err := s.repo.GetProductEnriched(product.ProductID)
+
+	if err != nil {
+		return nil, &errorhandler.BadRequestError{Message: "data tidak ditemukan"}
+	}
+
+	enrichedproduct.Images = imageResponses
+
+	return enrichedproduct, err
 }

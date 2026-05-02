@@ -2,7 +2,6 @@ import { useState } from "react";
 import TextField from "../../../shared/ui/TextField";
 import Button from "../../../shared/ui/Button";
 import Textarea from "../../../shared/ui/TextArea";
-import { useModal } from "../../../shared/modal/ModalContext";
 import SearchableSelect from "../../../shared/ui/SearchableSelect";
 
 export default function CreateProductModal({ onSubmit, onClose, loading, types, generatePresignedURLs, uploadToPresignedURL }) {
@@ -56,6 +55,7 @@ export default function CreateProductModal({ onSubmit, onClose, loading, types, 
         })
       );
     } catch (err) {
+      console.log(err)
       setImageItems((prev) =>
         prev.filter((item) => !tempItems.find((t) => t.id === item.id))
       );

@@ -73,15 +73,17 @@ func (s *ElasticSearchServer) startESWriter() {
 				log.Printf("Failed to get images for product %s: %v", event.ProductID, err)
 			}
 
-			images := make([]dto.ProductImageForES, 0, len(productImages))
+			images := make([]dto.ProductImageResponse, 0, len(productImages))
 			for _, image := range productImages {
-				images = append(images, dto.ProductImageForES{
+				images = append(images, dto.ProductImageResponse{
 					ImageID:     image.ImageID,
 					PicturePath: image.PicturePath,
 					IsPrimary:   image.IsPrimary,
 				})
 			}
 			enrichedProduct.Images = images
+
+			enrichedProduct.Discounts = []dto.DiscountResponse{}
 
 			if err := s.writeProductToES(enrichedProduct); err != nil {
 				log.Printf("Failed to write to ES for product %s: %v", event.ProductID, err)
@@ -137,22 +139,35 @@ func (s *ElasticSearchServer) deleteProductFromES(productID string) error {
 	return nil
 }
 
-func (s *ElasticSearchServer) SearchProducts(query string) ([]*dto.ProductEnrichedForES, error) {
+func (s *ElasticSearchServer) SearchProducts(query string, from, size int) ([]*dto.ProductEnrichedForES, error) {
 	searchQuery := map[string]interface{}{
+		"from": from, // ← tambah ini
+		"size": size, // ← tambah ini
 		"query": map[string]interface{}{
 			"bool": map[string]interface{}{
-				"must": map[string]interface{}{
-					"multi_match": map[string]interface{}{
-						"query":     query,
-						"fields":    []string{"ProductName^3", "ProductCode^2", "ProductSlug^2", "Description", "TypeName"},
-						"fuzziness": "AUTO",
+				"should": []interface{}{
+					map[string]interface{}{
+						"multi_match": map[string]interface{}{
+							"query":     query,
+							"fields":    []string{"ProductName^3", "TypeName^2", "ProductSlug", "Description"},
+							"fuzziness": "AUTO",
+						},
+					},
+					map[string]interface{}{
+						"match_phrase_prefix": map[string]interface{}{
+							"ProductName": map[string]interface{}{"query": query},
+						},
+					},
+					map[string]interface{}{
+						"match_phrase_prefix": map[string]interface{}{
+							"TypeName": map[string]interface{}{"query": query},
+						},
 					},
 				},
+				"minimum_should_match": 1,
 				"filter": map[string]interface{}{
 					"range": map[string]interface{}{
-						"Available": map[string]interface{}{
-							"gt": 0,
-						},
+						"Available": map[string]interface{}{"gt": 0},
 					},
 				},
 			},
@@ -201,8 +216,10 @@ func (s *ElasticSearchServer) SearchProducts(query string) ([]*dto.ProductEnrich
 	return products, nil
 }
 
-func (s *ElasticSearchServer) GetAllProducts() ([]*dto.ProductEnrichedForES, error) {
+func (s *ElasticSearchServer) GetAllProducts(from, size int) ([]*dto.ProductEnrichedForES, error) {
 	searchQuery := map[string]interface{}{
+		"from": from,
+		"size": size,
 		"query": map[string]interface{}{
 			"range": map[string]interface{}{
 				"Available": map[string]interface{}{
@@ -268,7 +285,7 @@ func (s *ElasticSearchServer) attachPresignedURLs(products []*dto.ProductEnriche
 
 			cached, err := s.redis.Get(ctx, cacheKey).Result()
 			if err == nil {
-				product.Images = []dto.ProductImageForES{{
+				product.Images = []dto.ProductImageResponse{{
 					ImageID:     image.ImageID,
 					PicturePath: cached,
 					IsPrimary:   image.IsPrimary,
@@ -291,7 +308,7 @@ func (s *ElasticSearchServer) attachPresignedURLs(products []*dto.ProductEnriche
 			presignedURL := url.String()
 			s.redis.Set(ctx, cacheKey, presignedURL, 4*time.Minute)
 
-			product.Images = []dto.ProductImageForES{{
+			product.Images = []dto.ProductImageResponse{{
 				ImageID:     image.ImageID,
 				PicturePath: presignedURL,
 				IsPrimary:   image.IsPrimary,

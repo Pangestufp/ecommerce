@@ -6,6 +6,7 @@ import (
 	"backend/helper"
 	"backend/service"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -176,8 +177,10 @@ func (h *ProductHandler) GetAllPaginated(c *gin.Context) {
 
 func (h *ProductHandler) GetProductBySearch(c *gin.Context) {
 	search := c.Query("search")
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
 
-	products, err := h.service.GetProductBySearch(search)
+	products, err := h.service.GetProductBySearch(search, page, limit)
 	if err != nil {
 		errorhandler.ErrorHandler(c, err)
 		return
@@ -187,5 +190,21 @@ func (h *ProductHandler) GetProductBySearch(c *gin.Context) {
 		StatusCode: 200,
 		Message:    "success",
 		Data:       products,
+	})
+}
+
+func (h *ProductHandler) GetProductBySlug(c *gin.Context) {
+	slug := c.Param("slug")
+
+	product, err := h.service.GetProductEnrichedBySlug(slug)
+	if err != nil {
+		errorhandler.ErrorHandler(c, err)
+		return
+	}
+
+	c.JSON(200, dto.ResponseParam{
+		StatusCode: 200,
+		Message:    "success",
+		Data:       product,
 	})
 }

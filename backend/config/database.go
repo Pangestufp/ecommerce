@@ -24,7 +24,6 @@ func LoadDB() {
 		ENV.DBPort,
 	)
 
-	log.Println(dsn)
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		log.Fatal("Failed connect database:", err)

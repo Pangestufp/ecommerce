@@ -43,7 +43,12 @@ class Endpoints {
   };
 
   static DISCOUNTTYPE = {
-      GET_ALL: () => `/api/discount-type`,
+    GET_ALL: () => `/api/discount-type`,
+  }
+
+  static CATALOG = {
+    GET_ALL: (search, page, limit) => `/api/catalog?search=${search}&page=${page}&limit=${limit}`,
+    GET_BY_SLUG: (slug) => `/api/catalog/${slug}`
   }
 
 }

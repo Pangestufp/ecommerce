@@ -13,8 +13,9 @@ import (
 
 func ProductRouter(api *gin.RouterGroup) {
 	ProductRepository := repository.NewProductRepository(config.DB)
+	DiscountRepository := repository.NewDiscountRepository(config.DB)
 	TypeRepository := repository.NewTypeRepository(config.DB)
-	ProductService := service.NewProductService(ProductRepository, TypeRepository, config.MinioClient, config.RedisClient, config.ENV.MinioBucket)
+	ProductService := service.NewProductService(ProductRepository, TypeRepository, DiscountRepository, config.MinioClient, config.RedisClient, config.ENV.MinioBucket)
 	ProductHandler := handler.NewProductHandler(ProductService)
 
 	Product := api.Group("/product")
@@ -28,7 +29,8 @@ func ProductRouter(api *gin.RouterGroup) {
 	Product.PUT("/:id", middleware.RoleMiddleware([]string{helper.Admin()}), ProductHandler.Update)
 	Product.DELETE("/:id", middleware.RoleMiddleware([]string{helper.Admin()}), ProductHandler.Delete)
 
-	ProductSearch := api.Group("/product-search")
-	ProductSearch.Use(middleware.JWTMiddleware())
-	ProductSearch.GET("", ProductHandler.GetProductBySearch)
+	ProductCatalog := api.Group("/catalog")
+	ProductCatalog.Use(middleware.JWTMiddleware())
+	ProductCatalog.GET("", ProductHandler.GetProductBySearch)
+	ProductCatalog.GET("/:slug", ProductHandler.GetProductBySlug)
 }

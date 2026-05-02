@@ -161,13 +161,14 @@ func (r *productRepository) GetProductEnriched(productID string) (*dto.ProductEn
 			END AS best_discount,
 			GREATEST(
 				CASE
+					WHEN d.discount_id IS NULL THEN pp.product_price
 					WHEN d.discount_type = 'amount' THEN COALESCE(pp.product_price, 0) - d.discount_value
 					WHEN d.discount_type = 'percentage' THEN COALESCE(pp.product_price, 0) - (COALESCE(pp.product_price, 0) * d.discount_value / 100)
 					ELSE 0
 				END,
 				1
 			) AS best_price,
-			SUM(COALESCE(i.stock, 0)) AS stok,
+			SUM(COALESCE(i.stock, 0)) AS stock,
 			SUM(COALESCE(i.reserved_stock, 0)) AS reserved_stock,
 			SUM(COALESCE(i.stock, 0)) - SUM(COALESCE(i.reserved_stock, 0)) AS available_stock,
 			CASE
@@ -218,6 +219,10 @@ func (r *productRepository) GetProductEnriched(productID string) (*dto.ProductEn
 	if err := r.db.Raw(query, productID, productID, now, now, productID, productID).Scan(&product).Error; err != nil {
 		return nil, err
 	}
+
+	product.BestDiscountFormat = helper.FormatRupiah(product.BestDiscount)
+	product.BestPriceFormat = helper.FormatRupiah(product.BestPrice)
+	product.ProductPriceFormat = helper.FormatRupiah(product.ProductPrice)
 
 	return &product, nil
 }
