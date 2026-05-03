@@ -1,7 +1,7 @@
 export default function ProductCard({ product, onClick }) {
   const primaryImg =
-    product.Images?.find((i) => i.is_primary === 1) || product.Images?.[0];
-  const hasDiscount = product.BestDiscount > 0;
+    product.images?.find((i) => i.is_primary === 1) || product.images?.[0];
+  const hasDiscount = product.best_discount > 0;
 
   return (
     <div
@@ -11,7 +11,7 @@ export default function ProductCard({ product, onClick }) {
       {primaryImg ? (
         <img
           src={primaryImg.picture_path}
-          alt={product.ProductName}
+          alt={product.product_name}
           className="w-full aspect-square object-cover"
           loading="lazy"
         />
@@ -23,22 +23,22 @@ export default function ProductCard({ product, onClick }) {
 
       <div className="p-3">
         <p className="text-sm font-medium text-gray-900 truncate mb-1">
-          {product.ProductName}
+          {product.product_name}
         </p>
 
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-sm font-medium text-gray-900">
-            {product.BestPriceFormat}
+            {product.best_price_format}
           </span>
           {hasDiscount && (
             <span className="text-xs bg-orange-50 text-orange-700 rounded px-1.5 py-0.5">
-              -{product.BestDiscountFormat}
+              -{product.best_discount_format}
             </span>
           )}
         </div>
 
         <p className="text-xs text-gray-400 mt-1.5">
-          Stok: {product.AvailableStock}
+          Stok: {product.available_stock}
         </p>
       </div>
     </div>

@@ -51,6 +51,11 @@ class Endpoints {
     GET_BY_SLUG: (slug) => `/api/catalog/${slug}`
   }
 
+  static CART = {
+    VERIFY: `/api/verify-cart`,
+    CHECKOUT: `/api/verify-cart`,
+  }
+
 }
 
 export default Endpoints;

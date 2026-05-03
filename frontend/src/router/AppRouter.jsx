@@ -7,6 +7,8 @@ import ProductPage from "../features/product/ProductPage";
 import ProductDetailPage from "../features/product/ProductDetailPage";
 import CatalogPage from "../features/catalog/CatalogPage";
 import CatalogDetailPage from "../features/catalog/CatalogDetailPage";
+import CartPage from "../features/cart/CartPage";
+import CheckoutPage from "../features/checkout/CheckoutPage";
 function AppRouter() {
   const token = getToken();
 
@@ -40,6 +42,24 @@ function AppRouter() {
         element={
           <ProtectedRoute>
             <CatalogPage/>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/keranjang"
+        element={
+          <ProtectedRoute>
+            <CartPage/>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/checkout"
+        element={
+          <ProtectedRoute>
+            <CheckoutPage/>
           </ProtectedRoute>
         }
       />

@@ -39,6 +39,7 @@ func main() {
 	router.ProductPriceRouter(api)
 	router.DiscountRouter(api)
 	router.InventoryRouter(api)
+	router.CartRouter(api)
 
 	server.Initialize(config.DB)
 

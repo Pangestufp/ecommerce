@@ -68,20 +68,7 @@ func (s *ElasticSearchServer) startESWriter() {
 				continue
 			}
 
-			productImages, err := s.ProductRepo.GetProductImageByProductID(event.ProductID)
-			if err != nil {
-				log.Printf("Failed to get images for product %s: %v", event.ProductID, err)
-			}
-
-			images := make([]dto.ProductImageResponse, 0, len(productImages))
-			for _, image := range productImages {
-				images = append(images, dto.ProductImageResponse{
-					ImageID:     image.ImageID,
-					PicturePath: image.PicturePath,
-					IsPrimary:   image.IsPrimary,
-				})
-			}
-			enrichedProduct.Images = images
+			enrichedProduct.Images = []dto.ProductImageResponse{}
 
 			enrichedProduct.Discounts = []dto.DiscountResponse{}
 
@@ -96,6 +83,10 @@ func (s *ElasticSearchServer) startESWriter() {
 
 func (s *ElasticSearchServer) writeProductToES(product *dto.ProductEnrichedForES) error {
 	body, err := json.Marshal(product)
+
+	// pretty, _ := json.MarshalIndent(product, "", "  ")
+	// log.Println(string(pretty))
+
 	if err != nil {
 		return fmt.Errorf("marshal error: %w", err)
 	}
@@ -149,25 +140,25 @@ func (s *ElasticSearchServer) SearchProducts(query string, from, size int) ([]*d
 					map[string]interface{}{
 						"multi_match": map[string]interface{}{
 							"query":     query,
-							"fields":    []string{"ProductName^3", "TypeName^2", "ProductSlug", "Description"},
+							"fields":    []string{"product_name^3", "type_name^2", "product_slug", "description"},
 							"fuzziness": "AUTO",
 						},
 					},
 					map[string]interface{}{
 						"match_phrase_prefix": map[string]interface{}{
-							"ProductName": map[string]interface{}{"query": query},
+							"product_name": map[string]interface{}{"query": query},
 						},
 					},
 					map[string]interface{}{
 						"match_phrase_prefix": map[string]interface{}{
-							"TypeName": map[string]interface{}{"query": query},
+							"type_name": map[string]interface{}{"query": query},
 						},
 					},
 				},
 				"minimum_should_match": 1,
 				"filter": map[string]interface{}{
 					"range": map[string]interface{}{
-						"Available": map[string]interface{}{"gt": 0},
+						"available": map[string]interface{}{"gt": 0},
 					},
 				},
 			},
@@ -222,7 +213,7 @@ func (s *ElasticSearchServer) GetAllProducts(from, size int) ([]*dto.ProductEnri
 		"size": size,
 		"query": map[string]interface{}{
 			"range": map[string]interface{}{
-				"Available": map[string]interface{}{
+				"available": map[string]interface{}{
 					"gt": 0,
 				},
 			},
@@ -273,47 +264,43 @@ func (s *ElasticSearchServer) GetAllProducts(from, size int) ([]*dto.ProductEnri
 }
 
 func (s *ElasticSearchServer) attachPresignedURLs(products []*dto.ProductEnrichedForES) {
+
 	ctx := context.Background()
 
 	for _, product := range products {
-		for _, image := range product.Images {
-			if image.IsPrimary != 1 {
-				continue // skip yang bukan primary
-			}
 
-			cacheKey := fmt.Sprintf("image:%s", image.ImageID)
+		cacheKey := fmt.Sprintf("image:%s", product.PrimaryImageID)
 
-			cached, err := s.redis.Get(ctx, cacheKey).Result()
-			if err == nil {
-				product.Images = []dto.ProductImageResponse{{
-					ImageID:     image.ImageID,
-					PicturePath: cached,
-					IsPrimary:   image.IsPrimary,
-				}}
-				break
-			}
-
-			url, err := s.MinioClient.PresignedGetObject(
-				ctx,
-				s.bucket,
-				image.PicturePath,
-				time.Minute*5,
-				nil,
-			)
-			if err != nil {
-				log.Printf("Failed to generate presigned URL for %s: %v", image.PicturePath, err)
-				break
-			}
-
-			presignedURL := url.String()
-			s.redis.Set(ctx, cacheKey, presignedURL, 4*time.Minute)
-
+		cached, err := s.redis.Get(ctx, cacheKey).Result()
+		if err == nil {
 			product.Images = []dto.ProductImageResponse{{
-				ImageID:     image.ImageID,
-				PicturePath: presignedURL,
-				IsPrimary:   image.IsPrimary,
+				ImageID:     product.PrimaryImageID,
+				PicturePath: cached,
+				IsPrimary:   1,
 			}}
-			break
+			continue
 		}
+
+		url, err := s.MinioClient.PresignedGetObject(
+			ctx,
+			s.bucket,
+			product.PrimaryImage,
+			time.Minute*5,
+			nil,
+		)
+		if err != nil {
+			log.Printf("Failed to generate presigned URL for %s: %v", product.PrimaryImage, err)
+			continue
+		}
+
+		presignedURL := url.String()
+		s.redis.Set(ctx, cacheKey, presignedURL, 4*time.Minute)
+
+		product.Images = []dto.ProductImageResponse{{
+			ImageID:     product.PrimaryImageID,
+			PicturePath: presignedURL,
+			IsPrimary:   1,
+		}}
+
 	}
 }

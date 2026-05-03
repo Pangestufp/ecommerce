@@ -3,35 +3,37 @@ package dto
 import "time"
 
 type ProductEnrichedForES struct {
-	ProductID          string
-	ProductCode        string
-	ProductName        string
-	ProductSlug        string
-	WeightGram         int
-	TypeID             string
-	TypeName           string
-	TypeCode           string
-	Description        string
-	DiscountID         *string
-	DiscountName       *string
-	DiscountType       *string
-	DiscountValue      *float64
-	ProductPrice       float64
-	BestDiscount       float64
-	BestPrice          float64
-	ProductPriceFormat string `gorm:"-"`
-	BestDiscountFormat string `gorm:"-"`
-	BestPriceFormat    string `gorm:"-"`
-	Stock              int64
-	ReservedStock      int64
-	AvailableStock     int64
-	Available          int
-	Images             []ProductImageResponse `gorm:"-"`
-	Discounts          []DiscountResponse     `gorm:"-"`
+	ProductID          string                 `json:"product_id"`
+	ProductCode        string                 `json:"product_code"`
+	ProductName        string                 `json:"product_name"`
+	ProductSlug        string                 `json:"product_slug"`
+	WeightGram         int                    `json:"weight_gram"`
+	TypeID             string                 `json:"type_id"`
+	TypeName           string                 `json:"type_name"`
+	TypeCode           string                 `json:"type_code"`
+	Description        string                 `json:"description"`
+	DiscountID         *string                `json:"discount_id"`
+	DiscountName       *string                `json:"discount_name"`
+	DiscountType       *string                `json:"discount_type"`
+	DiscountValue      *float64               `json:"discount_value"`
+	ProductPrice       float64                `json:"product_price"`
+	BestDiscount       float64                `json:"best_discount"`
+	BestPrice          float64                `json:"best_price"`
+	ProductPriceFormat string                 `json:"product_price_format" gorm:"-"`
+	BestDiscountFormat string                 `json:"best_discount_format" gorm:"-"`
+	BestPriceFormat    string                 `json:"best_price_format" gorm:"-"`
+	Stock              int64                  `json:"stock"`
+	ReservedStock      int64                  `json:"reserved_stock"`
+	AvailableStock     int64                  `json:"available_stock"`
+	Available          int                    `json:"available"`
+	PrimaryImage       string                 `json:"primary_image"`
+	PrimaryImageID     string                 `json:"primary_image_id"`
+	Images             []ProductImageResponse `json:"images" gorm:"-"`
+	Discounts          []DiscountResponse     `json:"discounts" gorm:"-"`
 }
 
 type ProductEvent struct {
-	ProductID string
-	Type      string
-	Timestamp time.Time
+	ProductID string    `json:"product_id"`
+	Type      string    `json:"type"`
+	Timestamp time.Time `json:"timestamp"`
 }

@@ -23,6 +23,7 @@ type ProductRepository interface {
 	GetProductByProductSlug(productSlug string) (*entity.Product, error)
 	GetProductEnriched(productID string) (*dto.ProductEnrichedForES, error)
 	GetAllProductsPaginated(cursor *dto.Paginate, search string, limit int) ([]dto.ProductListRow, error)
+	GetProductsEnrichedBatch(productIDs []string) ([]*dto.ProductEnrichedForES, error)
 }
 
 type productRepository struct {
@@ -153,6 +154,8 @@ func (r *productRepository) GetProductEnriched(productID string) (*dto.ProductEn
 			d.discount_name,
 			d.discount_type,
 			d.discount_value,
+			img.picture_path AS primary_image,
+			img.image_id AS primary_image_id,
 			COALESCE(pp.product_price, 0) AS product_price,
 			CASE
 				WHEN d.discount_type = 'amount' THEN d.discount_value
@@ -207,16 +210,23 @@ func (r *productRepository) GetProductEnriched(productID string) (*dto.ProductEn
 			ORDER BY created_at DESC
 			LIMIT 1
 		) pp ON p.product_id = pp.product_id
+		LEFT JOIN (
+			SELECT picture_path, product_id, image_id
+			FROM product_images
+			WHERE product_id = ?
+			AND is_primary = 1
+			LIMIT 1
+		) img ON p.product_id = img.product_id
 		WHERE p.product_id = ? AND p.status = 1
 		GROUP BY 
 			p.product_id, p.type_id, t.type_name, t.type_code,
 			d.discount_id, d.discount_name, d.discount_type, d.discount_value,
-			pp.product_price
+			pp.product_price, img.image_id, img.picture_path
 		ORDER BY best_discount DESC
 		LIMIT 1
 	`
 
-	if err := r.db.Raw(query, productID, productID, now, now, productID, productID).Scan(&product).Error; err != nil {
+	if err := r.db.Raw(query, productID, productID, now, now, productID, productID, productID).Scan(&product).Error; err != nil {
 		return nil, err
 	}
 
@@ -342,6 +352,140 @@ func (r *productRepository) GetAllProductsPaginated(cursor *dto.Paginate, search
 	if cursor != nil && cursor.Direction != nil && *cursor.Direction == "prev" {
 		for i, j := 0, len(products)-1; i < j; i, j = i+1, j-1 {
 			products[i], products[j] = products[j], products[i]
+		}
+	}
+
+	return products, nil
+}
+
+func (r *productRepository) GetProductsEnrichedBatch(productIDs []string) ([]*dto.ProductEnrichedForES, error) {
+	if len(productIDs) == 0 {
+		return []*dto.ProductEnrichedForES{}, nil
+	}
+
+	var raw []*dto.ProductEnrichedForES
+	now := helper.TimeNowWIB()
+
+	query := `
+		SELECT 
+			p.product_id,
+			p.product_code,
+			p.product_name,
+			p.product_slug,
+			p.weight_gram,
+			p.type_id,
+			t.type_name,
+			t.type_code,
+			p.description,
+			d.discount_id,
+			d.discount_name,
+			d.discount_type,
+			d.discount_value,
+			img.picture_path AS primary_image,
+			img.image_id AS primary_image_id,
+			COALESCE(pp.product_price, 0) AS product_price,
+			CASE
+				WHEN d.discount_type = 'amount' THEN d.discount_value
+				WHEN d.discount_type = 'percentage' THEN COALESCE(pp.product_price, 0) * d.discount_value / 100
+				ELSE 0
+			END AS best_discount,
+			GREATEST(
+				CASE
+					WHEN d.discount_id IS NULL THEN COALESCE(pp.product_price, 0)
+					WHEN d.discount_type = 'amount' THEN COALESCE(pp.product_price, 0) - d.discount_value
+					WHEN d.discount_type = 'percentage' THEN COALESCE(pp.product_price, 0) - (COALESCE(pp.product_price, 0) * d.discount_value / 100)
+					ELSE 0
+				END,
+				1
+			) AS best_price,
+			SUM(COALESCE(i.stock, 0)) AS stock,
+			SUM(COALESCE(i.reserved_stock, 0)) AS reserved_stock,
+			SUM(COALESCE(i.stock, 0)) - SUM(COALESCE(i.reserved_stock, 0)) AS available_stock,
+			CASE
+				WHEN SUM(COALESCE(i.stock, 0)) = 0 OR COALESCE(pp.product_price, 0) = 0 THEN 0
+				ELSE 1
+			END AS available
+		FROM products p
+		JOIN types t ON p.type_id = t.type_id
+		LEFT JOIN (
+			SELECT
+				product_id,
+				SUM(COALESCE(stock, 0)) AS stock,
+				SUM(COALESCE(reserved_stock, 0)) AS reserved_stock
+			FROM inventories
+			WHERE product_id IN (?)
+			GROUP BY product_id
+		) i ON p.product_id = i.product_id
+		LEFT JOIN (
+			SELECT
+				product_id,
+				discount_id,
+				discount_name,
+				discount_type,
+				discount_value
+			FROM discounts
+			WHERE
+				product_id IN (?)
+				AND start_at <= ?
+				AND expired_at >= ?
+				AND status = 1
+		) d ON p.product_id = d.product_id
+		LEFT JOIN (
+			SELECT product_price, product_id
+			FROM (
+				SELECT
+					product_price,
+					product_id,
+					ROW_NUMBER() OVER (PARTITION BY product_id ORDER BY created_at DESC) AS rn
+				FROM product_prices
+				WHERE product_id IN (?)
+			) ranked
+			WHERE rn = 1
+		) pp ON p.product_id = pp.product_id
+		LEFT JOIN (
+			SELECT picture_path, product_id, image_id
+			FROM (
+				SELECT
+					picture_path,
+					product_id,
+					image_id,
+					ROW_NUMBER() OVER (PARTITION BY product_id ORDER BY image_id) AS rn
+				FROM product_images
+				WHERE product_id IN (?)
+				AND is_primary = 1
+			) ranked
+			WHERE rn = 1
+		) img ON p.product_id = img.product_id
+		WHERE p.product_id IN (?) AND p.status = 1
+		GROUP BY
+			p.product_id, p.type_id, t.type_name, t.type_code,
+			d.discount_id, d.discount_name, d.discount_type, d.discount_value,
+			pp.product_price, img.image_id, img.picture_path
+		ORDER BY p.product_id, best_discount DESC
+	`
+
+	if err := r.db.Raw(query,
+		productIDs, // inventories IN
+		productIDs, // discounts IN
+		now,        // start_at <=
+		now,        // expired_at >=
+		productIDs, // product_prices IN
+		productIDs, // product_images IN
+		productIDs, // WHERE p.product_id IN
+	).Scan(&raw).Error; err != nil {
+		return nil, err
+	}
+
+	seen := make(map[string]bool)
+	var products []*dto.ProductEnrichedForES
+
+	for _, p := range raw {
+		if !seen[p.ProductID] {
+			seen[p.ProductID] = true
+			p.BestDiscountFormat = helper.FormatRupiah(p.BestDiscount)
+			p.BestPriceFormat = helper.FormatRupiah(p.BestPrice)
+			p.ProductPriceFormat = helper.FormatRupiah(p.ProductPrice)
+			products = append(products, p)
 		}
 	}
 
