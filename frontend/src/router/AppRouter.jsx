@@ -1,6 +1,9 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import ProtectedRoute from "./ProtectedRoute";
-import {getToken } from "../shared/util/token";
+import ProtectedAdminOwner from "./ProtectedAdminOwner";
+import AppLayout from "../shared/layout/AppLayout";
+import { getToken } from "../shared/util/token";
+
 import LoginPage from "../features/login/LoginPage";
 import TypePage from "../features/type/TypePage";
 import ProductPage from "../features/product/ProductPage";
@@ -9,81 +12,99 @@ import CatalogPage from "../features/catalog/CatalogPage";
 import CatalogDetailPage from "../features/catalog/CatalogDetailPage";
 import CartPage from "../features/cart/CartPage";
 import CheckoutPage from "../features/checkout/CheckoutPage";
+
 function AppRouter() {
   const token = getToken();
 
   return (
     <Routes>
+      {/* Login tidak pakai layout */}
       <Route
         path="/login"
-        element={token ? <Navigate to="/" replace /> : <LoginPage />}
+        element={token ? <Navigate to="/products" replace /> : <LoginPage />}
       />
 
+      {/* Admin routes */}
       <Route
-        path="/tipe"
+        path="/admin/tipe"
         element={
           <ProtectedRoute>
-            <TypePage/>
+            <ProtectedAdminOwner>
+              <AppLayout>
+                <TypePage />
+              </AppLayout>
+            </ProtectedAdminOwner>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/produk"
+        element={
+          <ProtectedRoute>
+            <ProtectedAdminOwner>
+              <AppLayout>
+                <ProductPage />
+              </AppLayout>
+            </ProtectedAdminOwner>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/produk/:id"
+        element={
+          <ProtectedRoute>
+            <ProtectedAdminOwner>
+              <AppLayout>
+                <ProductDetailPage />
+              </AppLayout>
+            </ProtectedAdminOwner>
           </ProtectedRoute>
         }
       />
 
-      <Route
-        path="/produk"
-        element={
-          <ProtectedRoute>
-            <ProductPage/>
-          </ProtectedRoute>
-        }
-      />
-
+      {/* User routes */}
       <Route
         path="/products"
         element={
           <ProtectedRoute>
-            <CatalogPage/>
+            <AppLayout>
+              <CatalogPage />
+            </AppLayout>
           </ProtectedRoute>
         }
       />
-
+      <Route
+        path="/products/:slug"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <CatalogDetailPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
       <Route
         path="/keranjang"
         element={
           <ProtectedRoute>
-            <CartPage/>
+            <AppLayout>
+              <CartPage />
+            </AppLayout>
           </ProtectedRoute>
         }
       />
-
       <Route
         path="/checkout"
         element={
           <ProtectedRoute>
-            <CheckoutPage/>
+            <AppLayout>
+              <CheckoutPage />
+            </AppLayout>
           </ProtectedRoute>
         }
       />
 
-      <Route
-          path="/produk/:id"
-          element={
-            <ProtectedRoute>
-              <ProductDetailPage/>
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/products/:slug"
-          element={
-            <ProtectedRoute>
-              <CatalogDetailPage/>
-            </ProtectedRoute>
-          }
-        />
-
-
-      <Route path="*" element={<Navigate to="/dashboard" />} />
+      <Route path="*" element={<Navigate to="/products" replace />} />
     </Routes>
   );
 }

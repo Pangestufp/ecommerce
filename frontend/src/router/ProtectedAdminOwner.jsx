@@ -1,8 +1,7 @@
 import { Navigate } from "react-router-dom"
-import { getToken, getRoles } from "../shared/token"
-import { getRole } from "../shared/util/token"
+import { getRole, getToken } from "../shared/util/token"
 
-function ProtectedAdmin({ children }) {
+function ProtectedAdminOwner({ children }) {
   const token = getToken()
   const role = getRole()
 
@@ -17,4 +16,4 @@ function ProtectedAdmin({ children }) {
   return children
 }
 
-export default ProtectedAdmin
+export default ProtectedAdminOwner

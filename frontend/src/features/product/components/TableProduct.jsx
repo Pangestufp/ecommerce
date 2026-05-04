@@ -71,7 +71,7 @@ export default function TableProduct({ data = [], onUpdate, onDelete }) {
                     <Button
                       variant="secondary"
                       className="text-xs px-3 py-1"
-                      onClick={() => navigate(`/produk/${row.product_id}`)}
+                      onClick={() => navigate(`/admin/produk/${row.product_id}`)}
                     >
                       Detail
                     </Button>
