@@ -18,6 +18,10 @@ type InventoryRepository interface {
 	GetByID(batchID string) (*entity.Inventory, error)
 	GetAllByProductID(productID string, cursor *dto.Paginate, search string, limit int) ([]entity.Inventory, error)
 	GetNextSeq(productID string) (int, string, error)
+	// GetHighestCostByProductID mmasukan ke sini
+
+
+
 }
 
 type inventoryRepository struct {
@@ -177,3 +181,5 @@ func (r *inventoryRepository) GetNextSeq(productID string) (int, string, error) 
 
 	return seq, yearMonth, nil
 }
+
+// fungsi GetHighestCostByProductID

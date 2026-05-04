@@ -24,14 +24,16 @@ type inventoryService struct {
 	repository        repository.InventoryRepository
 	productRepository repository.ProductRepository
 	userRepository    repository.UserRepository
+	logRepository     repository.LogRepository
 	redis             *redis.Client
 }
 
-func NewInventoryService(repository repository.InventoryRepository, productRepository repository.ProductRepository, userRepository repository.UserRepository, redis *redis.Client) *inventoryService {
+func NewInventoryService(repository repository.InventoryRepository, productRepository repository.ProductRepository, userRepository repository.UserRepository,logRepository repository.LogRepository, redis *redis.Client) *inventoryService {
 	return &inventoryService{
 		repository:        repository,
 		productRepository: productRepository,
 		userRepository:    userRepository,
+		logRepository:     logRepository,
 		redis:             redis,
 	}
 }
@@ -77,6 +79,24 @@ func (s *inventoryService) Create(req *dto.CreateInventoryRequest, userID string
 		return nil, &errorhandler.InternalServerError{Message: err.Error()}
 	}
 
+	//penambahan baru create
+	note := fmt.Sprintf("Menambah Batch baru %s dengan stok %v dan modal %s", 
+			inv.BatchCode, inv.Stock, helper.FormatRupiah(inv.CostPrice))
+		
+		s.logRepository.Create(&entity.Log{
+			LogID:         uuid.New().String(),
+			ReferenceType: "PRODUCT", 
+			ReferenceID:   inv.ProductID,
+			ReferenceName: product.ProductName,
+			Note:          note,
+			CreatedAt:     helper.TimeNowWIB(),
+			CreatedBy:     userID,
+			CreatedName:   user.Name,
+			SourceID:      inv.BatchID,
+			SourceName:    inv.BatchCode,
+			SourceType:    "INVENTORY",
+		})
+
 	go func() {
 		server.Instance.ProductEventChan <- &dto.ProductEvent{
 			ProductID: req.ProductID,
@@ -87,6 +107,7 @@ func (s *inventoryService) Create(req *dto.CreateInventoryRequest, userID string
 	ctx := context.Background()
 	cacheKey := fmt.Sprintf("inventory:%s", inv.ProductID)
 	s.redis.Del(ctx, cacheKey)
+
 
 	return &dto.InventoryResponse{
 		BatchID:       inv.BatchID,
@@ -118,6 +139,12 @@ func (s *inventoryService) Update(batchID string, req *dto.UpdateInventoryReques
 	if err != nil {
 		return nil, err
 	}
+	
+	product, _ := s.productRepository.GetProductByID(inv.ProductID)
+
+	//catatan log perubahan
+	oldStock := inv.Stock
+	oldPrice := inv.CostPrice
 
 	inv.CostPrice = req.CostPrice
 	inv.Stock = req.Stock
@@ -126,6 +153,23 @@ func (s *inventoryService) Update(batchID string, req *dto.UpdateInventoryReques
 	if err := s.repository.Update(inv, userID, user.Name); err != nil {
 		return nil, &errorhandler.InternalServerError{Message: err.Error()}
 	}
+	//log Mencatat perubahan pada Batch
+	note := fmt.Sprintf("Update Batch %s: Stok (%v -> %v), Modal (%s -> %s)", 
+			inv.BatchCode, oldStock, inv.Stock, helper.FormatRupiah(oldPrice), helper.FormatRupiah(inv.CostPrice))
+
+		s.logRepository.Create(&entity.Log{
+			LogID:         uuid.New().String(),
+			ReferenceType: "PRODUCT",
+			ReferenceID:   inv.ProductID,
+			ReferenceName: product.ProductName,
+			Note:          note,
+			CreatedAt:     helper.TimeNowWIB(),
+			CreatedBy:     userID,
+			CreatedName:   user.Name,
+			SourceID:      inv.BatchID,
+			SourceName:    inv.BatchCode,
+			SourceType:    "INVENTORY",
+		})
 
 	go func() {
 		server.Instance.ProductEventChan <- &dto.ProductEvent{

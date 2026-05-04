@@ -58,7 +58,8 @@ func (h *discountHandler) Create(c *gin.Context) {
 func (h *discountHandler) Delete(c *gin.Context) {
 	id := c.Param("id")
 
-	if err := h.service.Delete(id); err != nil {
+	userID := c.MustGet("userID").(string)
+	if err := h.service.Delete(id, userID); err != nil {
 		errorhandler.ErrorHandler(c, err)
 		return
 	}

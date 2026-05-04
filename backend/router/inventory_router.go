@@ -15,7 +15,8 @@ func InventoryRouter(api *gin.RouterGroup) {
 	InventoryRepository := repository.NewInventoryRepository(config.DB)
 	ProductRepository := repository.NewProductRepository(config.DB)
 	UserRepository := repository.NewUserRepository(config.DB)
-	InventoryService := service.NewInventoryService(InventoryRepository, ProductRepository, UserRepository, config.RedisClient)
+	LogRepository := repository.NewLogRepository(config.DB)
+	InventoryService := service.NewInventoryService(InventoryRepository, ProductRepository, UserRepository, LogRepository, config.RedisClient)
 	InventoryHandler := handler.NewInventoryHandler(InventoryService)
 
 	Inventory := api.Group("/inventory")

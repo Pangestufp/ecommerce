@@ -17,7 +17,7 @@ import (
 
 type DiscountService interface {
 	Create(req *dto.CreateDiscountRequest, userID string) (*dto.DiscountResponse, error)
-	Delete(discountID string) error
+	Delete(discountID string, userID string) error
 	GetAllByProductID(productID string, cursor *dto.Paginate, search string, limit int) ([]dto.DiscountResponse, *dto.Paginate, error)
 	GetDiscountType() []dto.DiscountType
 }
@@ -27,15 +27,17 @@ type discountService struct {
 	productRepository repository.ProductRepository
 	userRepository    repository.UserRepository
 	priceRepository   repository.ProductPriceRepository
+	logRepository     repository.LogRepository
 	redis             *redis.Client
 }
 
-func NewDiscountService(repository repository.DiscountRepository, productRepository repository.ProductRepository, userRepository repository.UserRepository, priceRepository repository.ProductPriceRepository, redis *redis.Client) *discountService {
+func NewDiscountService(repository repository.DiscountRepository, productRepository repository.ProductRepository, userRepository repository.UserRepository, priceRepository repository.ProductPriceRepository, logRepository repository.LogRepository, redis *redis.Client) *discountService {
 	return &discountService{
 		repository:        repository,
 		productRepository: productRepository,
 		userRepository:    userRepository,
 		priceRepository:   priceRepository,
+		logRepository:     logRepository,
 		redis:             redis,
 	}
 }
@@ -46,7 +48,7 @@ func (s *discountService) Create(req *dto.CreateDiscountRequest, userID string) 
 		return nil, &errorhandler.NotFoundError{Message: "User Invalid"}
 	}
 
-	_, err = s.productRepository.GetProductByID(req.ProductID)
+	product, err := s.productRepository.GetProductByID(req.ProductID)
 	if err != nil {
 		return nil, &errorhandler.NotFoundError{Message: "Product Not Found"}
 	}
@@ -104,6 +106,8 @@ func (s *discountService) Create(req *dto.CreateDiscountRequest, userID string) 
 	}
 
 	go func() {
+
+		
 		server.Instance.ProductEventChan <- &dto.ProductEvent{
 			ProductID: req.ProductID,
 			Type:      "create discount",
@@ -144,9 +148,25 @@ func (s *discountService) Create(req *dto.CreateDiscountRequest, userID string) 
 		statusFormat = "Aktif"
 	}
 
+	//create
 	ctx := context.Background()
 	cacheKey := fmt.Sprintf("ProductDiscount:%s", discount.ProductID)
 	s.redis.Del(ctx, cacheKey)
+
+	note := fmt.Sprintf("Membuat diskon '%s' dengan nilai %v", discount.DiscountName, req.DiscountValue)
+	s.logRepository.Create(&entity.Log{
+		LogID:         uuid.New().String(),
+		ReferenceType: "PRODUCT", 
+		ReferenceID:   discount.ProductID,
+		ReferenceName: product.ProductName,
+		Note:          note,
+		CreatedAt:     helper.TimeNowWIB(),
+		CreatedBy:     userID,
+		CreatedName:   user.Name,
+		SourceID:      discount.DiscountID,
+		SourceName:    discount.DiscountName,
+		SourceType:    "DISCOUNT",
+	})
 
 	return &dto.DiscountResponse{
 		DiscountID:           discount.DiscountID,
@@ -169,7 +189,7 @@ func (s *discountService) Create(req *dto.CreateDiscountRequest, userID string) 
 	}, nil
 }
 
-func (s *discountService) Delete(discountID string) error {
+func (s *discountService) Delete(discountID string, userID string) error {
 	discount, err := s.repository.GetByID(discountID)
 	if err != nil {
 		return err
@@ -185,6 +205,29 @@ func (s *discountService) Delete(discountID string) error {
 			Type:      "delete discount",
 		}
 	}()
+
+	product, err := s.productRepository.GetProductByID(discount.ProductID)
+	if err != nil {
+		return &errorhandler.NotFoundError{Message: "Product Not Found"}
+	}
+
+	user, err := s.userRepository.GetUserByID(userID)
+	if err != nil {
+		return &errorhandler.NotFoundError{Message: "User Invalid"}
+	}
+
+	//delete
+	note := fmt.Sprintf("Menghapus diskon '%s'", discount.DiscountName)
+	s.logRepository.Create(&entity.Log{
+		LogID:         uuid.New().String(),
+		ReferenceType: "DISCOUNT",
+		ReferenceID:   discount.ProductID, // Tetap gunakan Product ID untuk tracking
+		ReferenceName: product.ProductName,
+		Note:          note,
+		CreatedAt:     helper.TimeNowWIB(),
+		CreatedBy:     userID,
+		CreatedName:   user.Name,
+	})
 
 	return s.repository.Delete(discountID)
 }

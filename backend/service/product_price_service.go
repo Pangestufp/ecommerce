@@ -23,14 +23,18 @@ type productPriceService struct {
 	repository        repository.ProductPriceRepository
 	productRepository repository.ProductRepository
 	userRepository    repository.UserRepository
+	inventoryRepository repository.InventoryRepository 
+    logRepository       repository.LogRepository
 	redis             *redis.Client
 }
 
-func NewProductPriceService(repository repository.ProductPriceRepository, productRepository repository.ProductRepository, userRepository repository.UserRepository, redis *redis.Client) *productPriceService {
+func NewProductPriceService(repository repository.ProductPriceRepository, productRepository repository.ProductRepository, userRepository repository.UserRepository, inventoryRepository repository.InventoryRepository,
+	logRepository repository.LogRepository, redis *redis.Client) *productPriceService {
 	return &productPriceService{
 		repository:        repository,
 		productRepository: productRepository,
 		userRepository:    userRepository,
+		// masukain yang 2 tamabahn
 		redis:             redis,
 	}
 }
@@ -41,10 +45,27 @@ func (s *productPriceService) Create(req *dto.CreateProductPriceRequest, userID 
 		return nil, &errorhandler.NotFoundError{Message: "User Invalid"}
 	}
 
-	_, err = s.productRepository.GetProductByID(req.ProductID)
+	product, err := s.productRepository.GetProductByID(req.ProductID)
 	if err != nil {
 		return nil, &errorhandler.NotFoundError{Message: "Product Not Found"}
 	}
+	//perubahan fabio
+	// highestInv, err := s.inventoryRepository.GetHighestCostByProductID(req.ProductID)
+	// if err != nil {
+
+	// 	return nil, &errorhandler.InternalServerError{Message: "Gagal mengecek modal gudang"}
+	// }
+
+	// if highestInv != nil {
+	// 	// Jika harga baru lebih kecil dari modal tertinggi, blokir!
+	// 	if req.ProductPrice < highestInv.CostPrice {
+	// 		return nil, &errorhandler.BadRequestError{
+	// 			Message: fmt.Sprintf("Harga jual (%s) tidak boleh lebih rendah dari modal tertinggi! Modal saat ini: %s",
+	// 				helper.FormatRupiah(req.ProductPrice),
+	// 				helper.FormatRupiah(highestInv.CostPrice)),
+	// 		}
+	// 	}
+	// }
 
 	price := entity.ProductPrice{
 		PriceID:      uuid.New().String(),
@@ -58,6 +79,21 @@ func (s *productPriceService) Create(req *dto.CreateProductPriceRequest, userID 
 	if err := s.repository.Create(&price); err != nil {
 		return nil, &errorhandler.InternalServerError{Message: err.Error()}
 	}
+	//perubahan fabio
+	note := fmt.Sprintf("Mengubah harga produk menjadi %s", helper.FormatRupiah(req.ProductPrice))
+	s.logRepository.Create(&entity.Log{
+		LogID:         uuid.New().String(),
+		ReferenceType: "PRODUCT",
+		ReferenceID:   price.ProductID,
+		ReferenceName: product.ProductName,
+		Note:          note,
+		CreatedAt:     helper.TimeNowWIB(),
+		CreatedBy:     userID,
+		CreatedName:   user.Name,
+		SourceID:      price.PriceID,
+		SourceName:    "PRICE_CHANGE",
+		SourceType:    "PRICE",
+	})
 
 	go func() {
 		server.Instance.ProductEventChan <- &dto.ProductEvent{

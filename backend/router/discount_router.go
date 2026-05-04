@@ -16,7 +16,8 @@ func DiscountRouter(api *gin.RouterGroup) {
 	ProductRepository := repository.NewProductRepository(config.DB)
 	UserRepository := repository.NewUserRepository(config.DB)
 	ProductPriceRepository := repository.NewProductPriceRepository(config.DB)
-	DiscountService := service.NewDiscountService(DiscountRepository, ProductRepository, UserRepository, ProductPriceRepository, config.RedisClient)
+	LogRepository := repository .NewLogRepository(config.DB)
+	DiscountService := service.NewDiscountService(DiscountRepository, ProductRepository, UserRepository, ProductPriceRepository, LogRepository, config.RedisClient)
 	DiscountHandler := handler.NewDiscountHandler(DiscountService)
 
 	Discount := api.Group("/discount")
