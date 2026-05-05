@@ -20,13 +20,15 @@ func NewTypeHandler(service service.TypeService) *typeHandler {
 }
 
 func (h *typeHandler) Create(c *gin.Context) {
+	userID := c.MustGet("userID").(string)
 	var req dto.TypeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		errorhandler.ErrorHandler(c, &errorhandler.BadRequestError{Message: err.Error()})
 		return
 	}
 
-	data, err := h.service.CreateType(&req)
+	data, err := h.service.CreateType(&req, userID)
+
 	if err != nil {
 		errorhandler.ErrorHandler(c, err)
 		return
@@ -41,6 +43,7 @@ func (h *typeHandler) Create(c *gin.Context) {
 
 func (h *typeHandler) Update(c *gin.Context) {
 	id := c.Param("id")
+	userID := c.MustGet("userID").(string)
 
 	var req dto.TypeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -48,7 +51,7 @@ func (h *typeHandler) Update(c *gin.Context) {
 		return
 	}
 
-	data, err := h.service.UpdateType(id, &req)
+	data, err := h.service.UpdateType(id, &req, userID)
 	if err != nil {
 		errorhandler.ErrorHandler(c, err)
 		return
@@ -63,8 +66,9 @@ func (h *typeHandler) Update(c *gin.Context) {
 
 func (h *typeHandler) Delete(c *gin.Context) {
 	id := c.Param("id")
+	userID := c.MustGet("userID").(string)
 
-	if err := h.service.DeleteType(id); err != nil {
+	if err := h.service.DeleteType(id,userID); err != nil {
 		errorhandler.ErrorHandler(c, err)
 		return
 	}

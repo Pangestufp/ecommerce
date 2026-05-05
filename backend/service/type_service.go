@@ -16,9 +16,9 @@ import (
 )
 
 type TypeService interface {
-	CreateType(req *dto.TypeRequest) (*dto.TypeResponse, error)
-	UpdateType(typeID string, req *dto.TypeRequest) (*dto.TypeResponse, error)
-	DeleteType(typeID string) error
+	CreateType(req *dto.TypeRequest, userID string) (*dto.TypeResponse, error)
+	UpdateType(typeID string, req *dto.TypeRequest, userID string) (*dto.TypeResponse, error)
+	DeleteType(typeID string, userID string) error
 	GetAllTypePaginate(cursor *dto.Paginate, search string, limit int) ([]dto.TypeResponse, *dto.Paginate, error)
 	GetAllType() ([]dto.TypeResponse, error)
 	GetTypeByID(typeID string) (*dto.TypeResponse, error)
@@ -26,15 +26,22 @@ type TypeService interface {
 
 type typeService struct {
 	repository repository.TypeRepository
+	userRepository repository.UserRepository // Taambahan
+	logRepository  repository.LogRepository  // tambahan
 	redis      *redis.Client
 }
 
-func NewTypeService(repository repository.TypeRepository, redis *redis.Client) *typeService {
-	return &typeService{repository: repository, redis: redis}
+func NewTypeService(repository repository.TypeRepository, redis *redis.Client,userRepository repository.UserRepository,
+	logRepository repository.LogRepository ) *typeService {
+	return &typeService{repository: repository, redis: redis, userRepository: userRepository,logRepository: logRepository}
 }
 
-func (s *typeService) CreateType(req *dto.TypeRequest) (*dto.TypeResponse, error) {
+func (s *typeService) CreateType(req *dto.TypeRequest, userID string) (*dto.TypeResponse, error) {
 
+	user, err := s.userRepository.GetUserByID(userID)
+	if err != nil {
+		return nil, &errorhandler.NotFoundError{Message: "User Invalid"}
+	}
 	if req.TypeCode == "" {
 		return nil, &errorhandler.BadRequestError{Message: "Type Code kosong"}
 	}
@@ -65,6 +72,21 @@ func (s *typeService) CreateType(req *dto.TypeRequest) (*dto.TypeResponse, error
 		return nil, &errorhandler.InternalServerError{Message: err.Error()}
 	}
 
+	 s.logRepository.Create(&entity.Log{
+		LogID:         uuid.New().String(),
+		ReferenceType: "TYPE",
+		ReferenceID:   t.TypeID,
+		ReferenceName: t.TypeName,
+		Note:          fmt.Sprintf("Membuat kategori/tipe baru: %s", t.TypeName),
+		CreatedAt:     helper.TimeNowWIB(),
+		CreatedBy:     userID,
+		CreatedName:   user.Name,
+		SourceID:      t.TypeID,
+		SourceName:    "CREATE_TYPE",
+		SourceType:    "TYPE",
+	})
+
+
 	response := dto.TypeResponse{
 		TypeID:   t.TypeID,
 		TypeCode: t.TypeCode,
@@ -80,7 +102,11 @@ func (s *typeService) CreateType(req *dto.TypeRequest) (*dto.TypeResponse, error
 	return &response, nil
 }
 
-func (s *typeService) UpdateType(typeID string, req *dto.TypeRequest) (*dto.TypeResponse, error) {
+func (s *typeService) UpdateType(typeID string, req *dto.TypeRequest, userID string) (*dto.TypeResponse, error) {
+	user, err := s.userRepository.GetUserByID(userID)
+	if err != nil {
+		return nil, &errorhandler.NotFoundError{Message: "User Invalid"}
+	}
 	if req.TypeCode == "" {
 		return nil, &errorhandler.BadRequestError{Message: "Type Code kosong"}
 	}
@@ -97,6 +123,7 @@ func (s *typeService) UpdateType(typeID string, req *dto.TypeRequest) (*dto.Type
 	if err != nil {
 		return nil, &errorhandler.NotFoundError{Message: "Type Not Found"}
 	}
+	oldName := t.TypeName// buat catete log nya 
 
 	if helper.UpperAndTrim(req.TypeCode) != helper.UpperAndTrim(t.TypeCode) {
 		existing, _ := s.repository.GetTypeByTypeCode(helper.UpperAndTrim(req.TypeCode))
@@ -114,6 +141,20 @@ func (s *typeService) UpdateType(typeID string, req *dto.TypeRequest) (*dto.Type
 		return nil, &errorhandler.InternalServerError{Message: err.Error()}
 	}
 
+	s.logRepository.Create(&entity.Log{
+		LogID:         uuid.New().String(),
+		ReferenceType: "TYPE",
+		ReferenceID:   t.TypeID,
+		ReferenceName: t.TypeName,
+		Note:          fmt.Sprintf("Mengubah tipe dari %s menjadi %s", oldName, t.TypeName),
+		CreatedAt:     helper.TimeNowWIB(),
+		CreatedBy:     userID,
+		CreatedName:   user.Name,
+		SourceID:      t.TypeID,
+		SourceName:    "UPDATE_TYPE",
+		SourceType:    "TYPE",
+	})
+
 	ctx := context.Background()
 	cacheKey := fmt.Sprintf("type:%s", typeID)
 	s.redis.Del(ctx, cacheKey)
@@ -125,12 +166,30 @@ func (s *typeService) UpdateType(typeID string, req *dto.TypeRequest) (*dto.Type
 
 }
 
-func (s *typeService) DeleteType(typeID string) error {
-	_, err := s.repository.GetTypeByID(typeID)
+func (s *typeService) DeleteType(typeID string, userID string) error {
+	t, err := s.repository.GetTypeByID(typeID)//
 
 	if err != nil {
 		return &errorhandler.NotFoundError{Message: "type not found"}
 	}
+	user, err := s.userRepository.GetUserByID(userID)
+	if err != nil {
+		return &errorhandler.NotFoundError{Message: "User Invalid"}
+	}
+
+	s.logRepository.Create(&entity.Log{
+		LogID:         uuid.New().String(),
+		ReferenceType: "TYPE",
+		ReferenceID:   t.TypeID,
+		ReferenceName: t.TypeName,
+		Note:          fmt.Sprintf("Menghapus kategori/tipe: %s", t.TypeName),
+		CreatedAt:     helper.TimeNowWIB(),
+		CreatedBy:     userID,
+		CreatedName:   user.Name,
+		SourceID:      t.TypeID,
+		SourceName:    "DELETE_TYPE",
+		SourceType:    "TYPE",
+	})
 
 	ctx := context.Background()
 	cacheKey := fmt.Sprintf("type:%s", typeID)

@@ -13,8 +13,11 @@ import (
 
 func TypeRouter(api *gin.RouterGroup) {
 	TypeRepository := repository.NewTypeRepository(config.DB)
-	TypeService := service.NewTypeService(TypeRepository, config.RedisClient)
+	UserRepository := repository.NewUserRepository(config.DB) 
+    LogRepository := repository.NewLogRepository(config.DB)
+	TypeService := service.NewTypeService(TypeRepository, config.RedisClient,UserRepository, LogRepository,)
 	TypeHandler := handler.NewTypeHandler(TypeService)
+	
 
 	Type := api.Group("/type")
 
