@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
+	"github.com/shopspring/decimal"
 )
 
 type ProductPriceService interface {
@@ -20,22 +21,23 @@ type ProductPriceService interface {
 }
 
 type productPriceService struct {
-	repository        repository.ProductPriceRepository
-	productRepository repository.ProductRepository
-	userRepository    repository.UserRepository
-	inventoryRepository repository.InventoryRepository 
-    logRepository       repository.LogRepository
-	redis             *redis.Client
+	repository          repository.ProductPriceRepository
+	productRepository   repository.ProductRepository
+	userRepository      repository.UserRepository
+	inventoryRepository repository.InventoryRepository
+	logRepository       repository.LogRepository
+	redis               *redis.Client
 }
 
 func NewProductPriceService(repository repository.ProductPriceRepository, productRepository repository.ProductRepository, userRepository repository.UserRepository, inventoryRepository repository.InventoryRepository,
 	logRepository repository.LogRepository, redis *redis.Client) *productPriceService {
 	return &productPriceService{
-		repository:        repository,
-		productRepository: productRepository,
-		userRepository:    userRepository,
-		// masukain yang 2 tamabahn
-		redis:             redis,
+		repository:          repository,
+		productRepository:   productRepository,
+		userRepository:      userRepository,
+		inventoryRepository: inventoryRepository,
+		logRepository:       logRepository,
+		redis:               redis,
 	}
 }
 
@@ -70,7 +72,7 @@ func (s *productPriceService) Create(req *dto.CreateProductPriceRequest, userID 
 	price := entity.ProductPrice{
 		PriceID:      uuid.New().String(),
 		ProductID:    req.ProductID,
-		ProductPrice: req.ProductPrice,
+		ProductPrice: decimal.NewFromFloat(req.ProductPrice),
 		CreatedAt:    helper.TimeNowWIB(),
 		CreatedBy:    userID,
 		CreatedName:  user.Name,
@@ -80,7 +82,7 @@ func (s *productPriceService) Create(req *dto.CreateProductPriceRequest, userID 
 		return nil, &errorhandler.InternalServerError{Message: err.Error()}
 	}
 	//perubahan fabio
-	note := fmt.Sprintf("Mengubah harga produk menjadi %s", helper.FormatRupiah(req.ProductPrice))
+	note := fmt.Sprintf("Mengubah harga produk menjadi %s", helper.FormatRupiah(decimal.NewFromFloat(req.ProductPrice)))
 	s.logRepository.Create(&entity.Log{
 		LogID:         uuid.New().String(),
 		ReferenceType: "PRODUCT",
@@ -107,10 +109,11 @@ func (s *productPriceService) Create(req *dto.CreateProductPriceRequest, userID 
 	s.redis.Del(ctx, cacheKey)
 
 	return &dto.ProductPriceResponse{
-		PriceID:      price.PriceID,
-		ProductID:    price.ProductID,
-		ProductPrice: price.ProductPrice,
-		CreatedAt:    price.CreatedAt,
+		PriceID:            price.PriceID,
+		ProductID:          price.ProductID,
+		ProductPrice:       price.ProductPrice,
+		ProductPriceFormat: helper.FormatRupiah(price.ProductPrice),
+		CreatedAt:          price.CreatedAt,
 	}, nil
 }
 
@@ -171,12 +174,13 @@ func (s *productPriceService) GetAllByProductID(productID string, cursor *dto.Pa
 	responses := make([]dto.ProductPriceResponse, 0, len(prices))
 	for _, p := range prices {
 		responses = append(responses, dto.ProductPriceResponse{
-			PriceID:      p.PriceID,
-			ProductID:    p.ProductID,
-			ProductPrice: p.ProductPrice,
-			CreatedAt:    p.CreatedAt,
-			CreatedBy:    p.CreatedBy,
-			CreatedName:  p.CreatedName,
+			PriceID:            p.PriceID,
+			ProductID:          p.ProductID,
+			ProductPrice:       p.ProductPrice,
+			ProductPriceFormat: helper.FormatRupiah(p.ProductPrice),
+			CreatedAt:          p.CreatedAt,
+			CreatedBy:          p.CreatedBy,
+			CreatedName:        p.CreatedName,
 		})
 	}
 

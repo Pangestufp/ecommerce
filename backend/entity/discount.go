@@ -1,13 +1,17 @@
 package entity
 
-import "time"
+import (
+	"time"
+
+	"github.com/shopspring/decimal"
+)
 
 type Discount struct {
 	DiscountID    string `gorm:"primaryKey"`
 	ProductID     string
 	DiscountName  string
 	DiscountType  string
-	DiscountValue float64
+	DiscountValue decimal.Decimal
 	StartAt       time.Time
 	ExpiredAt     time.Time
 	CreatedBy     string

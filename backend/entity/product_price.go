@@ -1,11 +1,15 @@
 package entity
 
-import "time"
+import (
+	"time"
+
+	"github.com/shopspring/decimal"
+)
 
 type ProductPrice struct {
 	PriceID      string `gorm:"primaryKey"`
 	ProductID    string
-	ProductPrice float64
+	ProductPrice decimal.Decimal
 	CreatedAt    time.Time
 	CreatedBy    string
 	CreatedName  string

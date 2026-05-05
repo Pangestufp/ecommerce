@@ -23,33 +23,37 @@ import (
 
 type ProductService interface {
 	GeneratePresignedURLs(req dto.PresignedURLRequest) (*dto.PresignedURLResponse, error)
-	Create(req dto.CreateProductRequest) (*dto.ProductResponse, error)
-	Update(productID string, req dto.UpdateProductRequest) (*dto.ProductResponse, error)
+	Create(req dto.CreateProductRequest, userID string) (*dto.ProductResponse, error)
+	Update(productID string, req dto.UpdateProductRequest, userID string) (*dto.ProductResponse, error)
 	GetByID(productID string) (*dto.ProductResponse, error)
 	GetAll() ([]dto.ProductResponse, error)
-	Delete(productID string) error
+	Delete(productID string, userID string) error
 	GetAllPaginated(cursor *dto.Paginate, search string, limit int) ([]dto.ProductListRow, *dto.Paginate, error)
 	GetProductBySearch(search string, page, limit int) ([]*dto.ProductEnrichedForES, error)
 	GetProductEnrichedBySlug(slug string) (*dto.ProductEnrichedForES, error)
 }
 
 type productService struct {
-	repo   repository.ProductRepository
-	repoT  repository.TypeRepository
-	repoD  repository.DiscountRepository
-	minio  *minio.Client
-	redis  *redis.Client
-	bucket string
+	repo           repository.ProductRepository
+	repoT          repository.TypeRepository
+	repoD          repository.DiscountRepository
+	logRepository  repository.LogRepository
+	userRepository repository.UserRepository
+	minio          *minio.Client
+	redis          *redis.Client
+	bucket         string
 }
 
-func NewProductService(repo repository.ProductRepository, repoT repository.TypeRepository, repoD repository.DiscountRepository, minio *minio.Client, redis *redis.Client, bucket string) *productService {
+func NewProductService(repo repository.ProductRepository, repoT repository.TypeRepository, repoD repository.DiscountRepository, logRepository repository.LogRepository, userRepository repository.UserRepository, minio *minio.Client, redis *redis.Client, bucket string) *productService {
 	return &productService{
-		repo:   repo,
-		repoT:  repoT,
-		repoD:  repoD,
-		minio:  minio,
-		redis:  redis,
-		bucket: bucket,
+		repo:           repo,
+		repoT:          repoT,
+		repoD:          repoD,
+		logRepository:  logRepository,
+		userRepository: userRepository,
+		minio:          minio,
+		redis:          redis,
+		bucket:         bucket,
 	}
 }
 
@@ -170,7 +174,7 @@ func (s *productService) buildImages(productID string, objectNames []string) ([]
 	return images, errs
 }
 
-func (s *productService) Create(req dto.CreateProductRequest) (*dto.ProductResponse, error) {
+func (s *productService) Create(req dto.CreateProductRequest, userID string) (*dto.ProductResponse, error) {
 	if req.ProductCode == "" {
 		return nil, &errorhandler.BadRequestError{Message: "Product Code kosong"}
 	}
@@ -189,6 +193,11 @@ func (s *productService) Create(req dto.CreateProductRequest) (*dto.ProductRespo
 
 	if req.WeightGram < 0 {
 		return nil, &errorhandler.BadRequestError{Message: "Weight Gram kosong"}
+	}
+
+	user, err := s.userRepository.GetUserByID(userID)
+	if err != nil {
+		return nil, &errorhandler.NotFoundError{Message: "User Invalid"}
 	}
 
 	data, err := s.repo.GetProductByProductCode(helper.UpperAndTrim(req.ProductCode))
@@ -236,12 +245,27 @@ func (s *productService) Create(req dto.CreateProductRequest) (*dto.ProductRespo
 			Type:      "create product",
 		}
 
+		note := fmt.Sprintf("Membuat produk baru %s", product.ProductName)
+		s.logRepository.Create(&entity.Log{
+			LogID:         uuid.New().String(),
+			ReferenceType: "PRODUCT",
+			ReferenceID:   product.ProductID,
+			ReferenceName: product.ProductName,
+			Note:          note,
+			CreatedAt:     helper.TimeNowWIB(),
+			CreatedBy:     userID,
+			CreatedName:   user.Name,
+			SourceID:      product.ProductID,
+			SourceName:    product.ProductName,
+			SourceType:    "PRODUCT",
+		})
+
 	}()
 
 	return s.GetByID(product.ProductID)
 }
 
-func (s *productService) Update(productID string, req dto.UpdateProductRequest) (*dto.ProductResponse, error) {
+func (s *productService) Update(productID string, req dto.UpdateProductRequest, userID string) (*dto.ProductResponse, error) {
 
 	if req.ProductCode == "" {
 		return nil, &errorhandler.BadRequestError{Message: "Product Code kosong"}
@@ -263,6 +287,11 @@ func (s *productService) Update(productID string, req dto.UpdateProductRequest) 
 		return nil, &errorhandler.BadRequestError{Message: "Weight Gram kosong"}
 	}
 
+	user, err := s.userRepository.GetUserByID(userID)
+	if err != nil {
+		return nil, &errorhandler.NotFoundError{Message: "User Invalid"}
+	}
+
 	product, err := s.repo.GetProductByID(productID)
 	if err != nil {
 		return nil, &errorhandler.NotFoundError{Message: "product not found"}
@@ -280,6 +309,41 @@ func (s *productService) Update(productID string, req dto.UpdateProductRequest) 
 		if err == nil && data != nil {
 			return nil, &errorhandler.ForbiddenError{Message: "Product Name Telah digunakan"}
 		}
+	}
+
+	// Catat perubahan sebelum data di-update
+	var changes []string
+
+	if helper.TitleCase(req.ProductName) != product.ProductName {
+		changes = append(changes, fmt.Sprintf("Product Name: '%s' → '%s'", product.ProductName, helper.TitleCase(req.ProductName)))
+	}
+
+	if helper.UpperAndTrim(req.ProductCode) != product.ProductCode {
+		changes = append(changes, fmt.Sprintf("Product Code: '%s' → '%s'", product.ProductCode, helper.UpperAndTrim(req.ProductCode)))
+	}
+
+	if req.TypeID != product.TypeID {
+		reqType, errReq := s.repoT.GetTypeByID(req.TypeID)
+		proType, errPro := s.repoT.GetTypeByID(product.TypeID)
+
+		if errReq != nil || errPro != nil {
+			changes = append(changes, "Type produk: diperbarui")
+		} else {
+			changes = append(changes, fmt.Sprintf("Type produk: '%s' → '%s'", proType.TypeName, reqType.TypeName))
+		}
+
+	}
+
+	if req.Description != product.Description {
+		changes = append(changes, fmt.Sprintf("Description: '%s' → '%s'", product.Description, req.Description))
+	}
+
+	if req.WeightGram != product.WeightGram {
+		changes = append(changes, fmt.Sprintf("Weight Gram: '%d' → '%d'", product.WeightGram, req.WeightGram))
+	}
+
+	if len(req.Images) > 0 {
+		changes = append(changes, "Images: diperbarui")
 	}
 
 	product.ProductName = helper.TitleCase(req.ProductName)
@@ -309,15 +373,39 @@ func (s *productService) Update(productID string, req dto.UpdateProductRequest) 
 
 			if len(images) > 0 {
 				s.repo.CreateProductImages(images)
+
+				if len(oldImages) != len(req.Images) {
+					changes = append(changes, "Mengubah foto Produk")
+				}
 			}
 
 			server.Instance.ProductEventChan <- &dto.ProductEvent{
 				ProductID: product.ProductID,
 				Type:      "Update product",
 			}
-
-			//jangan lupa sini rewrite
 		}
+
+		// Buat note log berdasarkan perubahan yang terjadi
+		var note string
+		if len(changes) > 0 {
+			note = fmt.Sprintf("Mengubah produk %s: %s", product.ProductName, strings.Join(changes, "; "))
+		} else {
+			note = fmt.Sprintf("Mengubah produk %s (tidak ada perubahan data)", product.ProductName)
+		}
+
+		s.logRepository.Create(&entity.Log{
+			LogID:         uuid.New().String(),
+			ReferenceType: "PRODUCT",
+			ReferenceID:   product.ProductID,
+			ReferenceName: product.ProductName,
+			Note:          note,
+			CreatedAt:     helper.TimeNowWIB(),
+			CreatedBy:     userID,
+			CreatedName:   user.Name,
+			SourceID:      product.ProductID,
+			SourceName:    product.ProductName,
+			SourceType:    "PRODUCT",
+		})
 	}()
 
 	return s.GetByID(productID)
@@ -406,10 +494,15 @@ func (s *productService) GetAll() ([]dto.ProductResponse, error) {
 	return responses, nil
 }
 
-func (s *productService) Delete(productID string) error {
-	_, err := s.repo.GetProductByID(productID)
+func (s *productService) Delete(productID string, userID string) error {
+	product, err := s.repo.GetProductByID(productID)
 	if err != nil {
 		return &errorhandler.NotFoundError{Message: "product not found"}
+	}
+
+	user, err := s.userRepository.GetUserByID(userID)
+	if err != nil {
+		return &errorhandler.NotFoundError{Message: "User Invalid"}
 	}
 
 	go func() {
@@ -417,6 +510,22 @@ func (s *productService) Delete(productID string) error {
 			ProductID: productID,
 			Type:      "create product price",
 		}
+
+		note := fmt.Sprintf("Menghapus produk %s", product.ProductName)
+		s.logRepository.Create(&entity.Log{
+			LogID:         uuid.New().String(),
+			ReferenceType: "PRODUCT",
+			ReferenceID:   product.ProductID,
+			ReferenceName: product.ProductName,
+			Note:          note,
+			CreatedAt:     helper.TimeNowWIB(),
+			CreatedBy:     userID,
+			CreatedName:   user.Name,
+			SourceID:      product.ProductID,
+			SourceName:    product.ProductName,
+			SourceType:    "PRODUCT",
+		})
+
 	}()
 
 	return s.repo.Delete(productID)

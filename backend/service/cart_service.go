@@ -97,7 +97,7 @@ func (s *cartService) VerifyCart(req *dto.CartRequest) (*dto.CartResponse, error
 			continue
 		}
 
-		bestPrice := decimal.NewFromFloat(product.BestPrice)
+		bestPrice := product.BestPrice
 
 		ctx := context.Background()
 		cacheKey := fmt.Sprintf("image:%s", product.PrimaryImageID)

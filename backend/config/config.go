@@ -26,6 +26,8 @@ type Config struct {
 	ElasticDBPassword string `mapstructure:"ELASTICDB_PASSWORD"`
 	ElasticDBHost     string `mapstructure:"ELASTICDB_HOST"`
 	ElasticDBPort     string `mapstructure:"ELASTICDB_PORT"`
+	RajaOngkirAPIKey  string `mapstructure:"RAJAONGKIR_API_KEY"`
+	RajaOngkirURL     string `mapstructure:"RAJAONGKIR_URL"`
 }
 
 var ENV Config

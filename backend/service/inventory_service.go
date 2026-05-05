@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
+	"github.com/shopspring/decimal"
 )
 
 type InventoryService interface {
@@ -28,7 +29,7 @@ type inventoryService struct {
 	redis             *redis.Client
 }
 
-func NewInventoryService(repository repository.InventoryRepository, productRepository repository.ProductRepository, userRepository repository.UserRepository,logRepository repository.LogRepository, redis *redis.Client) *inventoryService {
+func NewInventoryService(repository repository.InventoryRepository, productRepository repository.ProductRepository, userRepository repository.UserRepository, logRepository repository.LogRepository, redis *redis.Client) *inventoryService {
 	return &inventoryService{
 		repository:        repository,
 		productRepository: productRepository,
@@ -68,7 +69,7 @@ func (s *inventoryService) Create(req *dto.CreateInventoryRequest, userID string
 		BatchID:       uuid.New().String(),
 		BatchCode:     fmt.Sprintf("%s-%s-%06d", product.ProductCode, yearMonth, seq),
 		ProductID:     req.ProductID,
-		CostPrice:     req.CostPrice,
+		CostPrice:     decimal.NewFromFloat(req.CostPrice),
 		Stock:         req.Stock,
 		ReservedStock: 0,
 		CreatedAt:     helper.TimeNowWIB(),
@@ -80,22 +81,22 @@ func (s *inventoryService) Create(req *dto.CreateInventoryRequest, userID string
 	}
 
 	//penambahan baru create
-	note := fmt.Sprintf("Menambah Batch baru %s dengan stok %v dan modal %s", 
-			inv.BatchCode, inv.Stock, helper.FormatRupiah(inv.CostPrice))
-		
-		s.logRepository.Create(&entity.Log{
-			LogID:         uuid.New().String(),
-			ReferenceType: "PRODUCT", 
-			ReferenceID:   inv.ProductID,
-			ReferenceName: product.ProductName,
-			Note:          note,
-			CreatedAt:     helper.TimeNowWIB(),
-			CreatedBy:     userID,
-			CreatedName:   user.Name,
-			SourceID:      inv.BatchID,
-			SourceName:    inv.BatchCode,
-			SourceType:    "INVENTORY",
-		})
+	note := fmt.Sprintf("Menambah Batch baru %s dengan stok %v dan modal %s",
+		inv.BatchCode, inv.Stock, helper.FormatRupiah(inv.CostPrice))
+
+	s.logRepository.Create(&entity.Log{
+		LogID:         uuid.New().String(),
+		ReferenceType: "PRODUCT",
+		ReferenceID:   inv.ProductID,
+		ReferenceName: product.ProductName,
+		Note:          note,
+		CreatedAt:     helper.TimeNowWIB(),
+		CreatedBy:     userID,
+		CreatedName:   user.Name,
+		SourceID:      inv.BatchID,
+		SourceName:    inv.BatchCode,
+		SourceType:    "INVENTORY",
+	})
 
 	go func() {
 		server.Instance.ProductEventChan <- &dto.ProductEvent{
@@ -108,16 +109,16 @@ func (s *inventoryService) Create(req *dto.CreateInventoryRequest, userID string
 	cacheKey := fmt.Sprintf("inventory:%s", inv.ProductID)
 	s.redis.Del(ctx, cacheKey)
 
-
 	return &dto.InventoryResponse{
-		BatchID:       inv.BatchID,
-		BatchCode:     inv.BatchCode,
-		ProductID:     inv.ProductID,
-		CostPrice:     inv.CostPrice,
-		Stock:         inv.Stock,
-		ReservedStock: inv.ReservedStock,
-		CreatedAt:     inv.CreatedAt,
-		UpdatedAt:     inv.UpdatedAt,
+		BatchID:         inv.BatchID,
+		BatchCode:       inv.BatchCode,
+		ProductID:       inv.ProductID,
+		CostPrice:       inv.CostPrice,
+		CostPriceFormat: helper.FormatRupiah(inv.CostPrice),
+		Stock:           inv.Stock,
+		ReservedStock:   inv.ReservedStock,
+		CreatedAt:       inv.CreatedAt,
+		UpdatedAt:       inv.UpdatedAt,
 	}, nil
 }
 
@@ -139,14 +140,14 @@ func (s *inventoryService) Update(batchID string, req *dto.UpdateInventoryReques
 	if err != nil {
 		return nil, err
 	}
-	
+
 	product, _ := s.productRepository.GetProductByID(inv.ProductID)
 
 	//catatan log perubahan
 	oldStock := inv.Stock
 	oldPrice := inv.CostPrice
 
-	inv.CostPrice = req.CostPrice
+	inv.CostPrice = decimal.NewFromFloat(req.CostPrice)
 	inv.Stock = req.Stock
 	inv.UpdatedAt = helper.TimeNowWIB()
 
@@ -154,22 +155,22 @@ func (s *inventoryService) Update(batchID string, req *dto.UpdateInventoryReques
 		return nil, &errorhandler.InternalServerError{Message: err.Error()}
 	}
 	//log Mencatat perubahan pada Batch
-	note := fmt.Sprintf("Update Batch %s: Stok (%v -> %v), Modal (%s -> %s)", 
-			inv.BatchCode, oldStock, inv.Stock, helper.FormatRupiah(oldPrice), helper.FormatRupiah(inv.CostPrice))
+	note := fmt.Sprintf("Update Batch %s: Stok (%v -> %v), Modal (%s -> %s)",
+		inv.BatchCode, oldStock, inv.Stock, helper.FormatRupiah(oldPrice), helper.FormatRupiah(inv.CostPrice))
 
-		s.logRepository.Create(&entity.Log{
-			LogID:         uuid.New().String(),
-			ReferenceType: "PRODUCT",
-			ReferenceID:   inv.ProductID,
-			ReferenceName: product.ProductName,
-			Note:          note,
-			CreatedAt:     helper.TimeNowWIB(),
-			CreatedBy:     userID,
-			CreatedName:   user.Name,
-			SourceID:      inv.BatchID,
-			SourceName:    inv.BatchCode,
-			SourceType:    "INVENTORY",
-		})
+	s.logRepository.Create(&entity.Log{
+		LogID:         uuid.New().String(),
+		ReferenceType: "PRODUCT",
+		ReferenceID:   inv.ProductID,
+		ReferenceName: product.ProductName,
+		Note:          note,
+		CreatedAt:     helper.TimeNowWIB(),
+		CreatedBy:     userID,
+		CreatedName:   user.Name,
+		SourceID:      inv.BatchID,
+		SourceName:    inv.BatchCode,
+		SourceType:    "INVENTORY",
+	})
 
 	go func() {
 		server.Instance.ProductEventChan <- &dto.ProductEvent{
@@ -183,14 +184,15 @@ func (s *inventoryService) Update(batchID string, req *dto.UpdateInventoryReques
 	s.redis.Del(ctx, cacheKey)
 
 	return &dto.InventoryResponse{
-		BatchID:       inv.BatchID,
-		BatchCode:     inv.BatchCode,
-		ProductID:     inv.ProductID,
-		CostPrice:     inv.CostPrice,
-		Stock:         inv.Stock,
-		ReservedStock: inv.ReservedStock,
-		CreatedAt:     inv.CreatedAt,
-		UpdatedAt:     inv.UpdatedAt,
+		BatchID:         inv.BatchID,
+		BatchCode:       inv.BatchCode,
+		ProductID:       inv.ProductID,
+		CostPrice:       inv.CostPrice,
+		CostPriceFormat: helper.FormatRupiah(inv.CostPrice),
+		Stock:           inv.Stock,
+		ReservedStock:   inv.ReservedStock,
+		CreatedAt:       inv.CreatedAt,
+		UpdatedAt:       inv.UpdatedAt,
 	}, nil
 }
 
@@ -251,14 +253,15 @@ func (s *inventoryService) GetAllByProductID(productID string, cursor *dto.Pagin
 	responses := make([]dto.InventoryResponse, 0, len(inventories))
 	for _, inv := range inventories {
 		responses = append(responses, dto.InventoryResponse{
-			BatchID:       inv.BatchID,
-			BatchCode:     inv.BatchCode,
-			ProductID:     inv.ProductID,
-			CostPrice:     inv.CostPrice,
-			Stock:         inv.Stock,
-			ReservedStock: inv.ReservedStock,
-			CreatedAt:     inv.CreatedAt,
-			UpdatedAt:     inv.UpdatedAt,
+			BatchID:         inv.BatchID,
+			BatchCode:       inv.BatchCode,
+			ProductID:       inv.ProductID,
+			CostPrice:       inv.CostPrice,
+			CostPriceFormat: helper.FormatRupiah(inv.CostPrice),
+			Stock:           inv.Stock,
+			ReservedStock:   inv.ReservedStock,
+			CreatedAt:       inv.CreatedAt,
+			UpdatedAt:       inv.UpdatedAt,
 		})
 	}
 

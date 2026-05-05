@@ -37,13 +37,29 @@ func (h *ProductHandler) GeneratePresignedURLs(c *gin.Context) {
 }
 
 func (h *ProductHandler) Create(c *gin.Context) {
+	userIDVal, ok := c.Get("userID")
+	if !ok {
+		errorhandler.ErrorHandler(c, &errorhandler.UnauthorizedError{
+			Message: "unauthorized",
+		})
+		return
+	}
+	userID, ok := userIDVal.(string)
+
+	if !ok {
+		errorhandler.ErrorHandler(c, &errorhandler.InternalServerError{
+			Message: "invalid user id",
+		})
+		return
+	}
+
 	var req dto.CreateProductRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		errorhandler.ErrorHandler(c, err)
 		return
 	}
 
-	data, err := h.service.Create(req)
+	data, err := h.service.Create(req, userID)
 	if err != nil {
 		errorhandler.ErrorHandler(c, err)
 		return
@@ -57,6 +73,22 @@ func (h *ProductHandler) Create(c *gin.Context) {
 }
 
 func (h *ProductHandler) Update(c *gin.Context) {
+	userIDVal, ok := c.Get("userID")
+	if !ok {
+		errorhandler.ErrorHandler(c, &errorhandler.UnauthorizedError{
+			Message: "unauthorized",
+		})
+		return
+	}
+	userID, ok := userIDVal.(string)
+
+	if !ok {
+		errorhandler.ErrorHandler(c, &errorhandler.InternalServerError{
+			Message: "invalid user id",
+		})
+		return
+	}
+
 	productID := c.Param("id")
 
 	var req dto.UpdateProductRequest
@@ -65,7 +97,7 @@ func (h *ProductHandler) Update(c *gin.Context) {
 		return
 	}
 
-	data, err := h.service.Update(productID, req)
+	data, err := h.service.Update(productID, req, userID)
 	if err != nil {
 		errorhandler.ErrorHandler(c, err)
 		return
@@ -109,9 +141,25 @@ func (h *ProductHandler) GetAll(c *gin.Context) {
 }
 
 func (h *ProductHandler) Delete(c *gin.Context) {
+	userIDVal, ok := c.Get("userID")
+	if !ok {
+		errorhandler.ErrorHandler(c, &errorhandler.UnauthorizedError{
+			Message: "unauthorized",
+		})
+		return
+	}
+	userID, ok := userIDVal.(string)
+
+	if !ok {
+		errorhandler.ErrorHandler(c, &errorhandler.InternalServerError{
+			Message: "invalid user id",
+		})
+		return
+	}
+
 	productID := c.Param("id")
 
-	if err := h.service.Delete(productID); err != nil {
+	if err := h.service.Delete(productID, userID); err != nil {
 		errorhandler.ErrorHandler(c, err)
 		return
 	}

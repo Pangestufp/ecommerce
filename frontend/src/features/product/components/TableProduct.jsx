@@ -17,11 +17,7 @@ export default function TableProduct({ data = [], onUpdate, onDelete }) {
 
   const formatPrice = (row) => {
     if (row.is_price_set !== 1) return <span className="text-xs text-gray-400">Belum diset</span>;
-    return new Intl.NumberFormat("id-ID", {
-      style: "currency",
-      currency: "IDR",
-      minimumFractionDigits: 0,
-    }).format(row.product_price);
+    return row.product_price_format;
   };
 
   const renderCell = (row, key) => {
@@ -39,7 +35,8 @@ export default function TableProduct({ data = [], onUpdate, onDelete }) {
   };
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-gray-200">
+    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+      <div className="overflow-x-auto">
       <table className="min-w-full text-sm text-left text-gray-700">
         <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
           <tr>
@@ -60,7 +57,7 @@ export default function TableProduct({ data = [], onUpdate, onDelete }) {
             </tr>
           ) : (
             data.map((row) => (
-              <tr key={row.product_id} className="hover:bg-gray-50 transition">
+              <tr key={row.product_id} className="hover:bg-gray-50 transition-colors">
                 {columns.map((col) => (
                   <td key={col.key} className="px-4 py-3 whitespace-nowrap">
                     {renderCell(row, col.key)}
@@ -96,6 +93,7 @@ export default function TableProduct({ data = [], onUpdate, onDelete }) {
           )}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

@@ -1,6 +1,10 @@
 package dto
 
-import "time"
+import (
+	"time"
+
+	"github.com/shopspring/decimal"
+)
 
 type ProductEnrichedForES struct {
 	ProductID          string                 `json:"product_id"`
@@ -15,10 +19,10 @@ type ProductEnrichedForES struct {
 	DiscountID         *string                `json:"discount_id"`
 	DiscountName       *string                `json:"discount_name"`
 	DiscountType       *string                `json:"discount_type"`
-	DiscountValue      *float64               `json:"discount_value"`
-	ProductPrice       float64                `json:"product_price"`
-	BestDiscount       float64                `json:"best_discount"`
-	BestPrice          float64                `json:"best_price"`
+	DiscountValue      *decimal.Decimal       `json:"discount_value"`
+	ProductPrice       decimal.Decimal        `json:"product_price"`
+	BestDiscount       decimal.Decimal        `json:"best_discount"`
+	BestPrice          decimal.Decimal        `json:"best_price"`
 	ProductPriceFormat string                 `json:"product_price_format" gorm:"-"`
 	BestDiscountFormat string                 `json:"best_discount_format" gorm:"-"`
 	BestPriceFormat    string                 `json:"best_price_format" gorm:"-"`

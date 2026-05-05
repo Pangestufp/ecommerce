@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
+	"github.com/shopspring/decimal"
 )
 
 type DiscountService interface {
@@ -54,7 +55,13 @@ func (s *discountService) Create(req *dto.CreateDiscountRequest, userID string) 
 	}
 
 	price, priceErr := s.priceRepository.GetLatestByProductID(req.ProductID)
-	if priceErr == nil && req.DiscountType == helper.Amount() && req.DiscountValue > price.ProductPrice {
+
+	if priceErr != nil {
+		return nil, &errorhandler.NotFoundError{Message: "Harga harus sudah disetting"}
+	}
+
+	discountValue := decimal.NewFromFloat(req.DiscountValue)
+	if req.DiscountType == helper.Amount() && discountValue.GreaterThan(price.ProductPrice) {
 		return nil, &errorhandler.BadRequestError{Message: "Diskon melebihi harga jual"}
 	}
 
@@ -87,12 +94,18 @@ func (s *discountService) Create(req *dto.CreateDiscountRequest, userID string) 
 	startAt := startDate
 	expiredAt := endDate.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
 
+	timeNow := helper.TimeNowWIB()
+
+	if expiredAt.Before(timeNow) {
+		return nil, &errorhandler.BadRequestError{Message: "Tanggal selesai diskon tidak valid"}
+	}
+
 	discount := entity.Discount{
 		DiscountID:    uuid.New().String(),
 		ProductID:     req.ProductID,
 		DiscountName:  req.DiscountName,
 		DiscountType:  req.DiscountType,
-		DiscountValue: req.DiscountValue,
+		DiscountValue: decimal.NewFromFloat(req.DiscountValue),
 		StartAt:       startAt,
 		ExpiredAt:     expiredAt,
 		Status:        1,
@@ -107,38 +120,35 @@ func (s *discountService) Create(req *dto.CreateDiscountRequest, userID string) 
 
 	go func() {
 
-		
 		server.Instance.ProductEventChan <- &dto.ProductEvent{
 			ProductID: req.ProductID,
 			Type:      "create discount",
 		}
 	}()
 
-	formatFlag := true
-	if priceErr != nil {
-		formatFlag = false
-	}
 	discountValueFormat := ""
 	if discount.DiscountType == helper.Percentage() {
-		discountValueFormat = fmt.Sprintf("%.0f%%", discount.DiscountValue*100)
+		percentage := discount.DiscountValue.Mul(decimal.NewFromInt(100))
+		discountValueFormat = fmt.Sprintf("%s%%", percentage.StringFixed(0))
 	} else {
 		discountValueFormat = helper.FormatRupiah(discount.DiscountValue)
 	}
 
 	discountAmountFormat := "Harga belum diatur"
 	finalValue := "Harga belum diatur"
-	if formatFlag {
-		originalPrice := price.ProductPrice
-		var discountAmount float64
-		if discount.DiscountValue < 1 {
-			discountAmount = originalPrice * discount.DiscountValue
-		} else {
-			discountAmount = discount.DiscountValue
-		}
-		finalPrice := originalPrice - discountAmount
-		discountAmountFormat = helper.FormatRupiah(discountAmount)
-		finalValue = helper.FormatRupiah(finalPrice)
+
+	originalPrice := price.ProductPrice
+	var discountAmount decimal.Decimal
+
+	if discount.DiscountValue.LessThan(decimal.NewFromInt(1)) {
+		discountAmount = originalPrice.Mul(discount.DiscountValue)
+	} else {
+		discountAmount = discount.DiscountValue
 	}
+
+	finalPrice := originalPrice.Sub(discountAmount)
+	discountAmountFormat = helper.FormatRupiah(discountAmount)
+	finalValue = helper.FormatRupiah(finalPrice)
 
 	statusFormat := ""
 	now := helper.TimeNowWIB()
@@ -153,10 +163,10 @@ func (s *discountService) Create(req *dto.CreateDiscountRequest, userID string) 
 	cacheKey := fmt.Sprintf("ProductDiscount:%s", discount.ProductID)
 	s.redis.Del(ctx, cacheKey)
 
-	note := fmt.Sprintf("Membuat diskon '%s' dengan nilai %v", discount.DiscountName, req.DiscountValue)
+	note := fmt.Sprintf("Membuat diskon '%s' dengan nilai %s", discount.DiscountName, discountValueFormat)
 	s.logRepository.Create(&entity.Log{
 		LogID:         uuid.New().String(),
-		ReferenceType: "PRODUCT", 
+		ReferenceType: "PRODUCT",
 		ReferenceID:   discount.ProductID,
 		ReferenceName: product.ProductName,
 		Note:          note,
@@ -289,38 +299,44 @@ func (s *discountService) GetAllByProductID(productID string, cursor *dto.Pagina
 	responses := make([]dto.DiscountResponse, 0, len(discounts))
 
 	price, err := s.priceRepository.GetLatestByProductID(productID)
-	formatFlag := err == nil
+
+	if err != nil {
+		return nil, nil, &errorhandler.InternalServerError{Message: err.Error()}
+	}
 
 	statusFormat := ""
 	now := helper.TimeNowWIB()
 
 	for _, discount := range discounts {
 
-		if now.Before(discount.StartAt) {
-			statusFormat = "Belum Aktif"
-		} else {
-			statusFormat = "Aktif"
-		}
-
 		discountValueFormat := ""
-		if discount.DiscountValue < 1 {
-			discountValueFormat = fmt.Sprintf("%.0f%%", discount.DiscountValue*100)
+		if discount.DiscountType == helper.Percentage() {
+			percentage := discount.DiscountValue.Mul(decimal.NewFromInt(100))
+			discountValueFormat = fmt.Sprintf("%s%%", percentage.StringFixed(0))
 		} else {
 			discountValueFormat = helper.FormatRupiah(discount.DiscountValue)
 		}
 
 		discountAmountFormat := "Harga belum diatur"
 		finalValue := "Harga belum diatur"
-		if formatFlag {
-			originalPrice := price.ProductPrice
-			var discountAmount float64
-			if discount.DiscountValue < 1 {
-				discountAmount = originalPrice * discount.DiscountValue
-			} else {
-				discountAmount = discount.DiscountValue
-			}
-			discountAmountFormat = helper.FormatRupiah(discountAmount)
-			finalValue = helper.FormatRupiah(originalPrice - discountAmount)
+
+		originalPrice := price.ProductPrice
+		var discountAmount decimal.Decimal
+
+		if discount.DiscountValue.LessThan(decimal.NewFromInt(1)) {
+			discountAmount = originalPrice.Mul(discount.DiscountValue)
+		} else {
+			discountAmount = discount.DiscountValue
+		}
+
+		finalPrice := originalPrice.Sub(discountAmount)
+		discountAmountFormat = helper.FormatRupiah(discountAmount)
+		finalValue = helper.FormatRupiah(finalPrice)
+
+		if now.Before(discount.StartAt) {
+			statusFormat = "Belum Aktif"
+		} else {
+			statusFormat = "Aktif"
 		}
 
 		responses = append(responses, dto.DiscountResponse{

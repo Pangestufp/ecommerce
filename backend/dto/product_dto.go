@@ -1,6 +1,10 @@
 package dto
 
-import "time"
+import (
+	"time"
+
+	"github.com/shopspring/decimal"
+)
 
 type PresignedURLRequest struct {
 	Files []FileItem `json:"files"`
@@ -60,21 +64,22 @@ type ProductImageResponse struct {
 }
 
 type ProductListRow struct {
-	ProductID         string    `json:"product_id"`
-	ProductCode       string    `json:"product_code"`
-	ProductName       string    `json:"product_name"`
-	ProductSlug       string    `json:"product_slug"`
-	WeightGram        int       `json:"weight_gram"`
-	TypeID            string    `json:"type_id"`
-	TypeName          string    `json:"type_name"`
-	Description       string    `json:"description"`
-	Status            int       `json:"status"`
-	CreatedAt         time.Time `json:"created_at"`
-	UpdatedAt         time.Time `json:"updated_at"`
-	Stock             int64     `json:"stock"`
-	ReservedStock     int64     `json:"reserved_stock"`
-	ProductPrice      float64   `json:"product_price"`
-	IsPriceSet        int       `json:"is_price_set"`
-	IsStockSet        int       `json:"is_stock_set"`
-	AvailableDiscount int64     `json:"available_discount"`
+	ProductID          string          `json:"product_id"`
+	ProductCode        string          `json:"product_code"`
+	ProductName        string          `json:"product_name"`
+	ProductSlug        string          `json:"product_slug"`
+	WeightGram         int             `json:"weight_gram"`
+	TypeID             string          `json:"type_id"`
+	TypeName           string          `json:"type_name"`
+	Description        string          `json:"description"`
+	Status             int             `json:"status"`
+	CreatedAt          time.Time       `json:"created_at"`
+	UpdatedAt          time.Time       `json:"updated_at"`
+	Stock              int64           `json:"stock"`
+	ReservedStock      int64           `json:"reserved_stock"`
+	ProductPrice       decimal.Decimal `json:"product_price"`
+	ProductPriceFormat string          `json:"product_price_format" gorm:"-"`
+	IsPriceSet         int             `json:"is_price_set"`
+	IsStockSet         int             `json:"is_stock_set"`
+	AvailableDiscount  int64           `json:"available_discount"`
 }

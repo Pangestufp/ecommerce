@@ -159,14 +159,14 @@ func (r *productRepository) GetProductEnriched(productID string) (*dto.ProductEn
 			COALESCE(pp.product_price, 0) AS product_price,
 			CASE
 				WHEN d.discount_type = 'amount' THEN d.discount_value
-				WHEN d.discount_type = 'percentage' THEN COALESCE(pp.product_price, 0) * d.discount_value / 100
+				WHEN d.discount_type = 'percentage' THEN COALESCE(pp.product_price, 0) * d.discount_value
 				ELSE 0
 			END AS best_discount,
 			GREATEST(
 				CASE
 					WHEN d.discount_id IS NULL THEN pp.product_price
 					WHEN d.discount_type = 'amount' THEN COALESCE(pp.product_price, 0) - d.discount_value
-					WHEN d.discount_type = 'percentage' THEN COALESCE(pp.product_price, 0) - (COALESCE(pp.product_price, 0) * d.discount_value / 100)
+					WHEN d.discount_type = 'percentage' THEN COALESCE(pp.product_price, 0) - (COALESCE(pp.product_price, 0) * d.discount_value)
 					ELSE 0
 				END,
 				1
@@ -355,6 +355,10 @@ func (r *productRepository) GetAllProductsPaginated(cursor *dto.Paginate, search
 		}
 	}
 
+	for i := range products {
+		products[i].ProductPriceFormat = helper.FormatRupiah(products[i].ProductPrice)
+	}
+
 	return products, nil
 }
 
@@ -386,14 +390,14 @@ func (r *productRepository) GetProductsEnrichedBatch(productIDs []string) ([]*dt
 			COALESCE(pp.product_price, 0) AS product_price,
 			CASE
 				WHEN d.discount_type = 'amount' THEN d.discount_value
-				WHEN d.discount_type = 'percentage' THEN COALESCE(pp.product_price, 0) * d.discount_value / 100
+				WHEN d.discount_type = 'percentage' THEN COALESCE(pp.product_price, 0) * d.discount_value
 				ELSE 0
 			END AS best_discount,
 			GREATEST(
 				CASE
 					WHEN d.discount_id IS NULL THEN COALESCE(pp.product_price, 0)
 					WHEN d.discount_type = 'amount' THEN COALESCE(pp.product_price, 0) - d.discount_value
-					WHEN d.discount_type = 'percentage' THEN COALESCE(pp.product_price, 0) - (COALESCE(pp.product_price, 0) * d.discount_value / 100)
+					WHEN d.discount_type = 'percentage' THEN COALESCE(pp.product_price, 0) - (COALESCE(pp.product_price, 0) * d.discount_value)
 					ELSE 0
 				END,
 				1

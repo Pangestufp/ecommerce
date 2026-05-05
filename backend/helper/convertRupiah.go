@@ -1,9 +1,14 @@
 package helper
 
-import "fmt"
+import (
+	"fmt"
 
-func FormatRupiah(amount float64) string {
-	intAmount := int64(amount)
+	"github.com/shopspring/decimal"
+)
+
+func FormatRupiah(amount decimal.Decimal) string {
+	// pisah integer dan desimal
+	intAmount := amount.IntPart()
 	str := fmt.Sprintf("%d", intAmount)
 	result := ""
 	for i, c := range reverse(str) {
@@ -12,6 +17,13 @@ func FormatRupiah(amount float64) string {
 		}
 		result = string(c) + result
 	}
+
+	// tambah koma + desimal kalau ada
+	cents := amount.Sub(decimal.NewFromInt(intAmount))
+	if !cents.IsZero() {
+		result += "," + cents.StringFixed(2)[2:] // ambil 2 digit setelah titik
+	}
+
 	return "Rp " + result
 }
 
