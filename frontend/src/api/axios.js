@@ -26,6 +26,10 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
 
+    if (!error.response) {
+      return Promise.reject(new Error("Tidak dapat terhubung ke server"))
+    }
+
     if (error.response.status === 401) {
       clearToken()
       window.location.replace("/login")
