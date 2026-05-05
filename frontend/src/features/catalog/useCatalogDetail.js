@@ -20,7 +20,7 @@ export function useCatalogDetail(slug) {
         closeLoading();
       } catch (err) {
         closeLoading();
-        await modalError(err);
+        await modalError(err.message || "Terjadi kesalahan");
       } finally {
         setLoading(false);
       }

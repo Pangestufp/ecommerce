@@ -29,7 +29,7 @@ export function useType() {
       fetchFirstPage(searchPara);
       await modalSuccess("Tipe berhasil dibuat");
     } catch (err) {
-      await modalError(err.message);
+      await modalError(err.message || "Terjadi kesalahan");
       throw err;
     } finally {
       setLoading(false);
@@ -52,7 +52,7 @@ export function useType() {
       fetchFirstPage(searchPara)
       await modalSuccess("Tipe berhasil diubah");
     } catch (err) {
-      await modalError(err.message);
+      await modalError(err.message || "Terjadi kesalahan");
       throw err;
     } finally {
       setLoading(false);
@@ -72,7 +72,7 @@ export function useType() {
       setTypes((prev) => prev.filter((t) => t.type_id !== id));
       await modalSuccess("Tipe berhasil dihapus");
     } catch (err) {
-      await modalError(err.message);
+      await modalError(err.message || "Terjadi kesalahan");
       throw err;
     } finally {
       setLoading(false);
@@ -101,7 +101,7 @@ export function useType() {
       setHasPrev(res.data.paginate.has_prev === "true")
 
     } catch (err) {
-      await modalError(err.message);
+      await modalError(err.message || "Terjadi kesalahan");
       throw err;
     } finally {
       setLoading(false);
@@ -130,7 +130,7 @@ export function useType() {
       setHasPrev(res.data.paginate.has_prev === "true")
 
     } catch (err) {
-      await modalError(err.message);
+      await modalError(err.message || "Terjadi kesalahan");
       throw err;
     } finally {
       setLoading(false);
@@ -164,7 +164,7 @@ export function useType() {
       }
 
     } catch (err) {
-      await modalError(err.message);
+      await modalError(err.message || "Terjadi kesalahan");
     } finally {
       setLoading(false);
     }

@@ -43,7 +43,7 @@ export function useProductDetail(id) {
       setProduct(res.data.data);
       console.log(res.data.data)
     } catch (err) {
-      await modalError(err.message);
+      await modalError(err.message || "Terjadi kesalahan");
     }
   };
 
@@ -65,7 +65,7 @@ export function useProductDetail(id) {
       fetchFirstPricePage();
       await modalSuccess("Harga berhasil dibuat");
     } catch (err) {
-      await modalError(err.message);
+      await modalError(err.message || "Terjadi kesalahan");
       throw err;
     } finally {
       setLoading(false);
@@ -93,7 +93,7 @@ export function useProductDetail(id) {
       setHasNextPrice(res.data.paginate.has_next === "true");
       setHasPrevPrice(res.data.paginate.has_prev === "true");
     } catch (err) {
-      await modalError(err.message);
+      await modalError(err.message || "Terjadi kesalahan");
       throw err;
     } finally {
       setLoading(false);
@@ -121,7 +121,7 @@ export function useProductDetail(id) {
       setHasNextPrice(res.data.paginate.has_next === "true");
       setHasPrevPrice(res.data.paginate.has_prev === "true");
     } catch (err) {
-      await modalError(err.message);
+      await modalError(err.message || "Terjadi kesalahan");
       throw err;
     } finally {
       setLoading(false);
@@ -148,7 +148,7 @@ export function useProductDetail(id) {
         setHasPrevPrice(false);
       }
     } catch (err) {
-      await modalError(err.message);
+      await modalError(err.message || "Terjadi kesalahan");
     } finally {
       setLoading(false);
     }
@@ -165,7 +165,7 @@ export function useProductDetail(id) {
       fetchFirstDiscountPage(searchParaDiscount);
       await modalSuccess("Diskon berhasil dibuat");
     } catch (err) {
-      await modalError(err.message);
+      await modalError(err.message || "Terjadi kesalahan");
       throw err;
     } finally {
       setLoading(false);
@@ -185,7 +185,7 @@ export function useProductDetail(id) {
       setDiscounts((prev) => prev.filter((t) => t.discount_id !== id));
       await modalSuccess("Tipe berhasil dihapus");
     } catch (err) {
-      await modalError(err.message);
+      await modalError(err.message || "Terjadi kesalahan");
       throw err;
     } finally {
       setLoading(false);
@@ -214,7 +214,7 @@ export function useProductDetail(id) {
       setHasNextDiscount(res.data.paginate.has_next === "true");
       setHasPrevDiscount(res.data.paginate.has_prev === "true");
     } catch (err) {
-      await modalError(err.message);
+      await modalError(err.message || "Terjadi kesalahan");
       throw err;
     } finally {
       setLoading(false);
@@ -243,7 +243,7 @@ export function useProductDetail(id) {
       setHasNextDiscount(res.data.paginate.has_next === "true");
       setHasPrevDiscount(res.data.paginate.has_prev === "true");
     } catch (err) {
-      await modalError(err.message);
+      await modalError(err.message || "Terjadi kesalahan");
       throw err;
     } finally {
       setLoading(false);
@@ -276,7 +276,7 @@ export function useProductDetail(id) {
         setHasPrevDiscount(false);
       }
     } catch (err) {
-      await modalError(err.message);
+      await modalError(err.message || "Terjadi kesalahan");
     } finally {
       setLoading(false);
     }
@@ -300,7 +300,7 @@ export function useProductDetail(id) {
       fetchFirstInventoryPage(searchParaInventory);
       await modalSuccess("Inventory berhasil dibuat");
     } catch (err) {
-      await modalError(err.message);
+      await modalError(err.message || "Terjadi kesalahan");
       throw err;
     } finally {
       setLoading(false);
@@ -325,7 +325,7 @@ export function useProductDetail(id) {
       fetchFirstInventoryPage(searchParaInventory);
       await modalSuccess("Inventory berhasil diubah");
     } catch (err) {
-      await modalError(err.message);
+      await modalError(err.message || "Terjadi kesalahan");
       throw err;
     } finally {
       setLoading(false);
@@ -354,7 +354,7 @@ export function useProductDetail(id) {
       setHasNextInventory(res.data.paginate.has_next === "true");
       setHasPrevInventory(res.data.paginate.has_prev === "true");
     } catch (err) {
-      await modalError(err.message);
+      await modalError(err.message || "Terjadi kesalahan");
       throw err;
     } finally {
       setLoading(false);
@@ -383,7 +383,7 @@ export function useProductDetail(id) {
       setHasNextInventory(res.data.paginate.has_next === "true");
       setHasPrevInventory(res.data.paginate.has_prev === "true");
     } catch (err) {
-      await modalError(err.message);
+      await modalError(err.message || "Terjadi kesalahan");
       throw err;
     } finally {
       setLoading(false);
@@ -416,7 +416,7 @@ export function useProductDetail(id) {
         setHasPrevInventory(false);
       }
     } catch (err) {
-      await modalError(err.message);
+      await modalError(err.message || "Terjadi kesalahan");
     } finally {
       setLoading(false);
     }

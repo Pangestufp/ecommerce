@@ -43,7 +43,7 @@ export function useProduct() {
     try {
       res = await ApiProduct.generatePresignedURLs(payload);
     } catch (err) {
-      await modalError(err.message);
+      await modalError(err.message || "Terjadi kesalahan");
     }
     return res.data.uploads;
   };
@@ -77,7 +77,7 @@ export function useProduct() {
         setHasPrev(false);
       }
     } catch (err) {
-      await modalError(err.message);
+      await modalError(err.message || "Terjadi kesalahan");
     } finally {
       setLoading(false);
     }
@@ -100,7 +100,7 @@ export function useProduct() {
       applyPaginate(res.data.paginate);
       setPage((p) => p + 1);
     } catch (err) {
-      await modalError(err.message);
+      await modalError(err.message || "Terjadi kesalahan");
       throw err;
     } finally {
       setLoading(false);
@@ -125,7 +125,7 @@ export function useProduct() {
       applyPaginate(res.data.paginate);
       setPage((p) => p - 1);
     } catch (err) {
-      await modalError(err.message);
+      await modalError(err.message || "Terjadi kesalahan");
       throw err;
     } finally {
       setLoading(false);
@@ -158,7 +158,7 @@ export function useProduct() {
       await fetchFirstPage(searchPara);
       await modalSuccess("Produk berhasil dibuat");
     } catch (err) {
-      await modalError(err.message);
+      await modalError(err.message || "Terjadi kesalahan");
       throw err;
     } finally {
       setLoading(false);
@@ -191,7 +191,7 @@ export function useProduct() {
       await fetchFirstPage(searchPara);
       await modalSuccess("Produk berhasil diubah");
     } catch (err) {
-      await modalError(err.message);
+      await modalError(err.message || "Terjadi kesalahan");
       throw err;
     } finally {
       setLoading(false);
@@ -211,7 +211,7 @@ export function useProduct() {
       await fetchFirstPage(searchPara);
       await modalSuccess("Produk berhasil dihapus");
     } catch (err) {
-      await modalError(err.message);
+      await modalError(err.message || "Terjadi kesalahan");
       throw err;
     } finally {
       setLoading(false);

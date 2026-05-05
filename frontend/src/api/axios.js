@@ -38,8 +38,8 @@ api.interceptors.response.use(
     const message =
       error.response?.data?.message ||
       error.response?.data?.status_code ||
-      "Something went wrong"
-
+      "Terjadi Kesalahan"
+      
     return Promise.reject(new Error(message))
   }
 )
