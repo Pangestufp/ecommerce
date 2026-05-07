@@ -6,6 +6,7 @@ import (
 	"backend/errorhandler"
 	"backend/helper"
 	"backend/repository"
+	"log"
 	"strings"
 
 	"github.com/google/uuid"
@@ -98,6 +99,8 @@ func (s *authService) Login(req *dto.LoginRequest) (*dto.LoginResponse, error) {
 		Name:  user.Name,
 		Token: token,
 	}
+
+	log.Printf("User dengan id : %s telah login ", user.UserID)
 
 	return &res, err
 }

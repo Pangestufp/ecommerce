@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"log"
 	"net/http"
 	"sync"
 	"time"
@@ -46,7 +47,10 @@ func (rl *RateLimiter) cleanupVisitors() {
 func (rl *RateLimiter) Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		key := c.FullPath() + ":" + c.ClientIP()
-		if userID, exists := c.Get("user_id"); exists {
+
+		userID, exists := c.Get("userID")
+
+		if exists {
 			if id, ok := userID.(string); ok {
 				key = "user:" + id
 			}
@@ -64,6 +68,13 @@ func (rl *RateLimiter) Middleware() gin.HandlerFunc {
 			c.Next()
 			return
 		}
+
+		log.Printf("RATE_LIMIT_CHECK path=%s ip=%s userID=%v key=%s",
+			c.FullPath(),
+			c.ClientIP(),
+			userID,
+			key,
+		)
 
 		if v.count >= rl.limit {
 			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
