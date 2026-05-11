@@ -51,6 +51,7 @@ func (s *productPriceService) Create(req *dto.CreateProductPriceRequest, userID 
 	if err != nil {
 		return nil, &errorhandler.NotFoundError{Message: "Product Not Found"}
 	}
+	
 	//perubahan fabio
 	// highestInv, err := s.inventoryRepository.GetHighestCostByProductID(req.ProductID)
 	// if err != nil {
@@ -68,6 +69,8 @@ func (s *productPriceService) Create(req *dto.CreateProductPriceRequest, userID 
 	// 		}
 	// 	}
 	// }
+
+	// catatan  cek harga terbaru jika = input user maka return (errro)
 
 	price := entity.ProductPrice{
 		PriceID:      uuid.New().String(),
@@ -114,6 +117,7 @@ func (s *productPriceService) Create(req *dto.CreateProductPriceRequest, userID 
 		ProductPrice:       price.ProductPrice,
 		ProductPriceFormat: helper.FormatRupiah(price.ProductPrice),
 		CreatedAt:          price.CreatedAt,
+		CreatedAtFormat:    helper.FormatTanggalIndo(price.CreatedAt),
 	}, nil
 }
 
@@ -181,6 +185,7 @@ func (s *productPriceService) GetAllByProductID(productID string, cursor *dto.Pa
 			CreatedAt:          p.CreatedAt,
 			CreatedBy:          p.CreatedBy,
 			CreatedName:        p.CreatedName,
+			CreatedAtFormat:    helper.FormatTanggalIndo(p.CreatedAt),
 		})
 	}
 

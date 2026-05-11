@@ -312,6 +312,8 @@ func (s *productService) Update(productID string, req dto.UpdateProductRequest, 
 	}
 
 	// Catat perubahan sebelum data di-update
+
+
 	var changes []string
 
 	if helper.TitleCase(req.ProductName) != product.ProductName {
