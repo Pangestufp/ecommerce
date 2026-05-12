@@ -1,7 +1,7 @@
 class Endpoints {
   static AUTH = {
-    LOGIN: "/api/login",
-    REGISTER: "/api/register",
+    LOGIN: "/api/auth/login",
+    REGISTER: "/api/auth/register",
   };
 
   static TYPE = {
@@ -11,6 +11,7 @@ class Endpoints {
     GET_ALL: () => `/api/type`,
     UPDATE: (id) => `/api/type/${id}`,
     DELETE: (id) => `/api/type/${id}`,
+    LOG: (id, direction, createAt) => `/api/logs/type?id=${id}&direction=${direction}&created_at=${createAt}`,
     CREATE: `/api/type`,
   };
 
@@ -21,6 +22,8 @@ class Endpoints {
     GET_ALL: () => `/api/product`,
     UPDATE: (id) => `/api/product/${id}`,
     DELETE: (id) => `/api/product/${id}`,
+    LOG: (productID, id, direction, createdAt) => 
+        `/api/logs/product/${productID}?id=${id}&direction=${direction}&created_at=${createdAt}`,
     CREATE: `/api/product`,
     GENERATE: `/api/product/presigned-urls`,
   };

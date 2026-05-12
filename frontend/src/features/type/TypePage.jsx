@@ -12,8 +12,15 @@ const columns = [
   { key: "type_desc", label: "Deskripsi", align: "left" },
 ];
 
+const columnsLog = [
+  { key: "reference_name", label: "Nama Tipe", align: "left" },
+  { key: "created_name", label: "Nama", align: "left" },
+  { key: "created_at_format", label: "Waktu Dibuat", align: "left"},
+  { key: "note", label: "Catatan", align: "left" },
+];
+
 export default function TypePage() {
-  const { types, loading, page, hasNext, hasPrev, setSearch, create, update, del, next, prev } = useType();
+  const { types, loading, page, hasNext, hasPrev, logHasPrev, logHasNext, logTypes, logPage,nextLog, prevLog, setSearch, create, update, del, next, prev } = useType();
   const [showCreate, setShowCreate] = useState(false);
   const [showUpdate, setShowUpdate] = useState(false);
   const [selectedRow, setSelectedRow] = useState(null);
@@ -74,6 +81,29 @@ export default function TypePage() {
           Next
         </Button>
       </div>
+
+
+        {/* log type */}
+      <Table
+        columns={columnsLog}
+        data={logTypes}
+        rowKey="log_id"
+      />
+
+      <div className="flex items-center justify-end gap-2 mt-4">
+        <Button variant="secondary" onClick={prevLog} disabled={loading||!logHasPrev}>
+          Prev
+        </Button>
+        <span className="text-sm text-gray-500">
+            Page {logPage} 
+        </span>
+        <Button variant="secondary" onClick={nextLog} disabled={loading||!logHasNext}>
+          Next
+        </Button>
+      </div>
+      
+
+
 
       {showCreate && (
         <CreateTypeModal

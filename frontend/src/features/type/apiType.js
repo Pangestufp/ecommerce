@@ -25,6 +25,12 @@ const ApiType={
     getAll: async()=>{
         const res = await api.get(Endpoints.TYPE.GET_ALL())
         return res
+    },
+    logType: async(id, direction, createAt)=>{
+        console.log("Tarik data 1")
+        const res = await api.get(Endpoints.TYPE.LOG(id,direction,createAt))
+        console.log("Tarik data 2")
+        return res
     }
 
 }

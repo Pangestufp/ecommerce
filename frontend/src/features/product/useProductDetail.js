@@ -33,6 +33,13 @@ export function useProductDetail(id) {
   const [hasPrevInventory, setHasPrevInventory] = useState(false);
   const [searchParaInventory, setSearchParaInventory] = useState("");
 
+// Tambah
+  const [logs, setLogs] = useState([]); 
+  const [logPaginate, setLogPaginate] = useState(null); 
+  const [logPage, setLogPage] = useState(1); 
+  const [hasNextLog, setHasNextLog] = useState(true); 
+  const [hasPrevLog, setHasPrevLog] = useState(false); 
+
   const [types, setTypes] = useState([]);
 
   const [product, setProduct] = useState(null);
@@ -63,6 +70,7 @@ export function useProductDetail(id) {
       const res = await ApiProduct.createPrice(payload);
       setPrices((prev) => [res.data.data, ...prev]);
       fetchFirstPricePage();
+      fetchFirstLogPage();
       await modalSuccess("Harga berhasil dibuat");
     } catch (err) {
       await modalError(err.message || "Terjadi kesalahan");
@@ -163,6 +171,7 @@ export function useProductDetail(id) {
       const res = await ApiProduct.createDiscount(payload);
       setDiscounts((prev) => [res.data.data, ...prev]);
       fetchFirstDiscountPage(searchParaDiscount);
+      fetchFirstLogPage();
       await modalSuccess("Diskon berhasil dibuat");
     } catch (err) {
       await modalError(err.message || "Terjadi kesalahan");
@@ -183,6 +192,7 @@ export function useProductDetail(id) {
     try {
       await ApiProduct.deleteDiscount(id);
       setDiscounts((prev) => prev.filter((t) => t.discount_id !== id));
+      fetchFirstLogPage();
       await modalSuccess("Tipe berhasil dihapus");
     } catch (err) {
       await modalError(err.message || "Terjadi kesalahan");
@@ -298,6 +308,7 @@ export function useProductDetail(id) {
       const res = await ApiProduct.createInventory(payload);
       setInventories((prev) => [res.data.data, ...prev]);
       fetchFirstInventoryPage(searchParaInventory);
+      fetchFirstLogPage();
       await modalSuccess("Inventory berhasil dibuat");
     } catch (err) {
       await modalError(err.message || "Terjadi kesalahan");
@@ -323,6 +334,7 @@ export function useProductDetail(id) {
         prev.map((t) => (t.batch_id === id ? res.data.data : t)),
       );
       fetchFirstInventoryPage(searchParaInventory);
+      fetchFirstLogPage();
       await modalSuccess("Inventory berhasil diubah");
     } catch (err) {
       await modalError(err.message || "Terjadi kesalahan");
@@ -429,11 +441,84 @@ export function useProductDetail(id) {
     }
   }, []);
 
+//penambahan fab
+// --- FUNGSI FETCH LOG --- //
+  const fetchFirstLogPage = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await ApiProduct.getAllLogPaginate(id, "", "next", ""); // Panggil API Log baru
+
+      setLogs(res.data.data);
+
+      if (res.data.data.length > 0) {
+        setLogPaginate(res.data.paginate);
+        setLogPage(1);
+        setHasNextLog(res.data.paginate.has_next === "true");
+        setHasPrevLog(res.data.paginate.has_prev === "true");
+      } else {
+        setHasNextLog(false);
+        setHasPrevLog(false);
+      }
+    } catch (err) {
+      await modalError(err.message || "Gagal mengambil log");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const nextLog = async () => {
+    if (logPaginate.has_next === "false") return;
+    setLoading(true);
+    try {
+      const res = await ApiProduct.getAllLogPaginate(
+        id,
+        logPaginate.last_id,
+        "next",
+        logPaginate.last_created_at
+      );
+      setLogs(res.data.data);
+      setLogPaginate(res.data.paginate);
+      setLogPage((prev) => prev + 1);
+      setHasNextLog(res.data.paginate.has_next === "true");
+      setHasPrevLog(res.data.paginate.has_prev === "true");
+    } catch (err) {
+      await modalError(err.message || "Gagal ke halaman berikutnya");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const prevLog = async () => {
+    if (logPaginate.has_prev === "false") return;
+    setLoading(true);
+    try {
+      const res = await ApiProduct.getAllLogPaginate(
+        id,
+        logPaginate.first_id,
+        "prev",
+        logPaginate.first_created_at
+      );
+      setLogs(res.data.data);
+      setLogPaginate(res.data.paginate);
+      setLogPage((prev) => prev - 1);
+      setHasNextLog(res.data.paginate.has_next === "true");
+      setHasPrevLog(res.data.paginate.has_prev === "true");
+    } catch (err) {
+      await modalError(err.message || "Gagal ke halaman sebelumnya");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
+
   useEffect(() => {
     fetchProduct();
     fetchFirstPricePage("");
     fetchFirstInventoryPage("");
     fetchFirstDiscountPage("");
+    fetchFirstLogPage();
     fetchTypes();
   }, []);
 
@@ -467,5 +552,11 @@ export function useProductDetail(id) {
     nextInventory,
     prevInventory,
     setSearchInventory,
+    logs, 
+    logPage, 
+    hasNextLog, 
+    hasPrevLog, 
+    nextLog, 
+    prevLog,
   };
 }

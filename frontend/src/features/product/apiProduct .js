@@ -68,6 +68,10 @@ const ApiProduct = {
         const res = await api.get(Endpoints.DISCOUNTTYPE.GET_ALL())
         return res
     },
+    getAllLogPaginate: async (productID, id, direction, createdAt) => {
+        const res = await api.get(Endpoints.PRODUCT.LOG(productID, id, direction, createdAt))
+        return res
+    },
 }
  
 export default ApiProduct

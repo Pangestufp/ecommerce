@@ -46,12 +46,19 @@ export default function ProductDetailPage() {
     nextInventory,
     prevInventory,
     setSearchInventory,
+    logs,
+    logPage,
+    hasNextLog,
+    hasPrevLog,
+    nextLog,
+    prevLog,
   } = useProductDetail(id);
 
   const [showCreateDiscount, setShowCreateDiscount] = useState(false);
   const [showCreateInventory, setShowCreateInventory] = useState(false);
   const [showCreatePrice, setShowCreatePrice] = useState(false);
   const [selectedInventory, setSelectedInventory] = useState(null);
+  
 
   // inventoryColumns di sini karena butuh setSelectedInventory
   const inventoryColumns = [
@@ -78,14 +85,9 @@ export default function ProductDetailPage() {
       align: "left",
     },
     {
-      key: "created_at",
+      key: "created_at_format",
       label: "Ditambahkan Pada",
       align: "left",
-      render: (value) =>
-        new Date(value).toLocaleString("id-ID", {
-          dateStyle: "medium",
-          timeStyle: "short",
-        }),
     },
   ];
 
@@ -122,6 +124,13 @@ export default function ProductDetailPage() {
     },
     { key: "start_at_format", label: "Mulai", align: "left" },
     { key: "expired_at_format", label: "Berakhir", align: "left" },
+  ];
+//perubahan fab
+  const logColumns = [
+    { key: "reference_name", label: "Nama Produk", align: "left" },
+    { key: "created_name", label: "Nama", align: "left" },
+    { key: "created_at_format", label: "Waktu Dibuat", align: "left" },
+    { key: "note", label: "Catatan", align: "left" },
   ];
 
   const handleCreatePrice = async (form) => {
@@ -289,6 +298,22 @@ export default function ProductDetailPage() {
           onNext={nextInventory}
           disabledPrev={loading || !hasPrevInventory}
           disabledNext={loading || !hasNextInventory}
+        />
+      </Section>
+
+     
+      <Section title="Riwayat Aktivitas Produk">
+        <Table
+          columns={logColumns}
+          data={logs}
+          rowKey="log_id"
+        />
+        <Pagination
+          page={logPage}
+          onPrev={prevLog}
+          onNext={nextLog}
+          disabledPrev={loading || !hasPrevLog}
+          disabledNext={loading || !hasNextLog}
         />
       </Section>
 

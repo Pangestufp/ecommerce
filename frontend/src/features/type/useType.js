@@ -27,6 +27,7 @@ export function useType() {
       const res = await ApiType.create(payload);
       setTypes((prev) => [res.data.data, ...prev]);
       fetchFirstPage(searchPara);
+      fetchLogFirstPage()
       await modalSuccess("Tipe berhasil dibuat");
     } catch (err) {
       await modalError(err.message || "Terjadi kesalahan");
@@ -50,6 +51,7 @@ export function useType() {
         prev.map((t) => (t.type_id === id ? res.data.data : t)),
       );
       fetchFirstPage(searchPara)
+      fetchLogFirstPage()
       await modalSuccess("Tipe berhasil diubah");
     } catch (err) {
       await modalError(err.message || "Terjadi kesalahan");
@@ -70,6 +72,7 @@ export function useType() {
     try {
       await ApiType.delete(id);
       setTypes((prev) => prev.filter((t) => t.type_id !== id));
+      fetchLogFirstPage()
       await modalSuccess("Tipe berhasil dihapus");
     } catch (err) {
       await modalError(err.message || "Terjadi kesalahan");
@@ -179,9 +182,107 @@ export function useType() {
   }, []);
 
 
+//log
+  const [logTypes, setLogTypes] = useState([]);
+  const [logPaginate, setLogPaginate] = useState(null);
+  const [logPage, setLogPage] = useState(1);
+  const [logHasNext, setLogHasNext] = useState(true);
+  const [logHasPrev, setLogHasPrev] = useState(false);
+
+   const nextLog = async () => {
+    if (logPaginate.has_next === "false") return;
+
+    const closeLoading = modalLoading("Loading...");
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await ApiType.logType(
+        logPaginate.last_id,
+        "next",
+        logPaginate.last_created_at,
+      );
+      setLogTypes(res.data.data);
+      setLogPaginate(res.data.paginate);
+      setLogPage(prev => prev + 1)
+
+      setLogHasNext(res.data.paginate.has_next === "true")
+      setLogHasPrev(res.data.paginate.has_prev === "true")
+
+    } catch (err) {
+      await modalError(err.message || "Terjadi kesalahan");
+      throw err;
+    } finally {
+      setLoading(false);
+      closeLoading();
+    }
+  };
+
+  const prevLog = async () => {
+    if (logPaginate.has_prev === "false") return;
+
+    const closeLoading = modalLoading("Loading...");
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await ApiType.logType(
+        logPaginate.first_id,
+        "prev",
+        logPaginate.first_created_at,
+        
+      );
+      setLogTypes(res.data.data);
+      setLogPaginate(res.data.paginate);
+      setLogPage(prev => prev - 1)
+      
+      setLogHasNext(res.data.paginate.has_next === "true")
+      setLogHasPrev(res.data.paginate.has_prev === "true")
+
+    } catch (err) {
+      await modalError(err.message || "Terjadi kesalahan");
+      throw err;
+    } finally {
+      setLoading(false);
+      closeLoading();
+    }
+  };
+
+  const fetchLogFirstPage = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const res = await ApiType.logType(
+        "","next",""
+      );
+
+      setLogTypes(res.data.data);
+      console.log(res.data.data)
+
+      if(res.data.data.length>0){
+
+        setLogPaginate(res.data.paginate);
+        setLogPage(1);
+
+        setLogHasNext(res.data.paginate.has_next === "true")
+        setLogHasPrev(res.data.paginate.has_prev === "true")
+
+      }else{
+        setLogHasNext(false)
+        setLogHasPrev(false)
+      }
+
+    } catch (err) {
+    } finally {
+      setLoading(false);
+    }
+  };
+//penutup og
+
+
   useEffect(() => {
     fetchFirstPage("");
+    fetchLogFirstPage();
   }, []);
 
-  return { create, next, prev, update, del, setSearch, hasNext, hasPrev, page, types, loading, error };
+  return { create, next, prev, update, del, setSearch,nextLog, prevLog, logHasNext, logHasPrev, logPage, logTypes, hasNext, hasPrev, page, types, loading, error };
 }
