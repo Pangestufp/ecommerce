@@ -53,23 +53,34 @@ func (s *productPriceService) Create(req *dto.CreateProductPriceRequest, userID 
 	}
 	
 	//perubahan fabio
-	// highestInv, err := s.inventoryRepository.GetHighestCostByProductID(req.ProductID)
-	// if err != nil {
+currentPrice, err := s.repository.GetLatestByProductID(req.ProductID)
+	if err == nil && currentPrice != nil {
+		if decimal.NewFromFloat(req.ProductPrice).Equal(currentPrice.ProductPrice) {
+			return nil, &errorhandler.BadRequestError{
+				Message: fmt.Sprintf("Harga baru tidak boleh sama dengan harga saat ini (%s)", helper.FormatRupiah(currentPrice.ProductPrice)),
+			}
+		}
+	}
 
-	// 	return nil, &errorhandler.InternalServerError{Message: "Gagal mengecek modal gudang"}
-	// }
+	highestInv, err := s.inventoryRepository.GetHighestCostByProductID(req.ProductID)
+	if err != nil {
 
-	// if highestInv != nil {
-	// 	// Jika harga baru lebih kecil dari modal tertinggi, blokir!
-	// 	if req.ProductPrice < highestInv.CostPrice {
-	// 		return nil, &errorhandler.BadRequestError{
-	// 			Message: fmt.Sprintf("Harga jual (%s) tidak boleh lebih rendah dari modal tertinggi! Modal saat ini: %s",
-	// 				helper.FormatRupiah(req.ProductPrice),
-	// 				helper.FormatRupiah(highestInv.CostPrice)),
-	// 		}
-	// 	}
-	// }
+		return nil, &errorhandler.InternalServerError{Message: "Gagal mengecek modal gudang"}
+	}
 
+	if highestInv != nil {
+		newPrice := decimal.NewFromFloat(req.ProductPrice)
+		// Jika harga baru < modal tertinggi
+		if newPrice.LessThan(highestInv.CostPrice) {
+			return nil, &errorhandler.BadRequestError{
+				Message: fmt.Sprintf("Harga jual (%s) tidak boleh lebih rendah dari modal tertinggi! Modal saat ini (HPP): %s",
+					helper.FormatRupiah(newPrice),
+					helper.FormatRupiah(highestInv.CostPrice)),
+			}
+		}
+	}
+
+	// harga tidak boleh di bawah modal
 	// catatan  cek harga terbaru jika = input user maka return (errro)
 
 	price := entity.ProductPrice{
