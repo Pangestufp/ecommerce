@@ -39,6 +39,8 @@ func main() {
 	router.InventoryRouter(api)
 	router.CartRouter(api)
 	router.LogRouter(api)
+	router.OngkirRouter(api)
+	router.UserAddressRouter(api)
 
 	server.Initialize(config.DB)
 
