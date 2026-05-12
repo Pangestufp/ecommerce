@@ -7,6 +7,7 @@ import (
 	"backend/middleware"
 	"backend/repository"
 	"backend/service"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -17,13 +18,16 @@ func ProductPriceRouter(api *gin.RouterGroup) {
 	UserRepository := repository.NewUserRepository(config.DB)
 	InventoryRepository := repository.NewInventoryRepository(config.DB)
 	LogRepository := repository.NewLogRepository(config.DB)
-	ProductPriceService := service.NewProductPriceService(ProductPriceRepository, ProductRepository, UserRepository,InventoryRepository, LogRepository, config.RedisClient)
+	ProductPriceService := service.NewProductPriceService(ProductPriceRepository, ProductRepository, UserRepository, InventoryRepository, LogRepository, config.RedisClient)
 	ProductPriceHandler := handler.NewProductPriceHandler(ProductPriceService)
 
 	ProductPrice := api.Group("/product-price")
 
 	ProductPrice.Use(middleware.JWTMiddleware())
 
-	ProductPrice.POST("", middleware.RoleMiddleware([]string{helper.Admin()}), ProductPriceHandler.Create)
-	ProductPrice.GET("/:id", ProductPriceHandler.GetAll)
+	rlWrite := middleware.NewRateLimiter(20, time.Minute)
+	rlRead := middleware.NewRateLimiter(60, time.Minute)
+
+	ProductPrice.POST("", rlWrite.Middleware(), middleware.RoleMiddleware([]string{helper.Admin()}), ProductPriceHandler.Create)
+	ProductPrice.GET("/:id", rlRead.Middleware(), ProductPriceHandler.GetAll)
 }

@@ -9,9 +9,6 @@ type User struct {
 	Status     int
 	Role       string
 	Password   string
-	Address    string
-	Phone      string
-	PostalCode string
 	VerifiedAt *time.Time
 	CreatedAt  time.Time
 	UpdatedAt  time.Time

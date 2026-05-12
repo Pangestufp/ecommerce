@@ -7,6 +7,7 @@ import (
 	"backend/middleware"
 	"backend/repository"
 	"backend/service"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -24,15 +25,18 @@ func ProductRouter(api *gin.RouterGroup) {
 
 	Product.Use(middleware.JWTMiddleware())
 
-	Product.POST("/presigned-urls", middleware.RoleMiddleware([]string{helper.Admin()}), ProductHandler.GeneratePresignedURLs)
-	Product.POST("", middleware.RoleMiddleware([]string{helper.Admin()}), ProductHandler.Create)
-	Product.GET("", ProductHandler.GetAllPaginated)
-	Product.GET("/:id", ProductHandler.GetByID)
-	Product.PUT("/:id", middleware.RoleMiddleware([]string{helper.Admin()}), ProductHandler.Update)
-	Product.DELETE("/:id", middleware.RoleMiddleware([]string{helper.Admin()}), ProductHandler.Delete)
+	rlWrite := middleware.NewRateLimiter(20, time.Minute)
+	rlRead := middleware.NewRateLimiter(60, time.Minute)
+
+	Product.POST("/presigned-urls", rlWrite.Middleware(), middleware.RoleMiddleware([]string{helper.Admin()}), ProductHandler.GeneratePresignedURLs)
+	Product.POST("", rlWrite.Middleware(), middleware.RoleMiddleware([]string{helper.Admin()}), ProductHandler.Create)
+	Product.GET("", rlRead.Middleware(), ProductHandler.GetAllPaginated)
+	Product.GET("/:id", rlRead.Middleware(), ProductHandler.GetByID)
+	Product.PUT("/:id", rlWrite.Middleware(), middleware.RoleMiddleware([]string{helper.Admin()}), ProductHandler.Update)
+	Product.DELETE("/:id", rlWrite.Middleware(), middleware.RoleMiddleware([]string{helper.Admin()}), ProductHandler.Delete)
 
 	ProductCatalog := api.Group("/catalog")
 	ProductCatalog.Use(middleware.JWTMiddleware())
-	ProductCatalog.GET("", ProductHandler.GetProductBySearch)
-	ProductCatalog.GET("/:slug", ProductHandler.GetProductBySlug)
+	ProductCatalog.GET("", rlRead.Middleware(), ProductHandler.GetProductBySearch)
+	ProductCatalog.GET("/:slug", rlRead.Middleware(), ProductHandler.GetProductBySlug)
 }

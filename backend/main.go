@@ -26,8 +26,6 @@ func main() {
 
 	r := gin.Default()
 
-	rl := middleware.NewRateLimiter(60, time.Minute)
-	r.Use(rl.Middleware())
 	r.Use(middleware.CORSMiddleware())
 
 	api := r.Group("/api")

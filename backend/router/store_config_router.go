@@ -7,6 +7,7 @@ import (
 	"backend/middleware"
 	"backend/repository"
 	"backend/service"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -20,7 +21,10 @@ func StoreConfigRouter(api *gin.RouterGroup) {
 
 	StoreConfig.Use(middleware.JWTMiddleware())
 
-	StoreConfig.PUT("", middleware.RoleMiddleware([]string{helper.Admin()}), StoreConfigHandler.Upsert)
-	StoreConfig.GET("", StoreConfigHandler.GetConfig)
+	rlWrite := middleware.NewRateLimiter(20, time.Minute)
+	rlRead := middleware.NewRateLimiter(60, time.Minute)
+
+	StoreConfig.PUT("", rlWrite.Middleware(), middleware.RoleMiddleware([]string{helper.Admin()}), StoreConfigHandler.Upsert)
+	StoreConfig.GET("", rlRead.Middleware(), StoreConfigHandler.GetConfig)
 
 }

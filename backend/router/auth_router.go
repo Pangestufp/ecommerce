@@ -3,8 +3,10 @@ package router
 import (
 	"backend/config"
 	"backend/handler"
+	"backend/middleware"
 	"backend/repository"
 	"backend/service"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -14,6 +16,10 @@ func AuthRouter(api *gin.RouterGroup) {
 	AuthService := service.NewAuthService(AuthRepository, config.RedisClient)
 	AuthHandler := handler.NewAuthHandler(AuthService)
 
-	api.POST("/register", AuthHandler.RegisterCustomer)
-	api.POST("/login", AuthHandler.Login)
+	rlLogin := middleware.NewRateLimiter(10, 15*time.Minute)
+	rlRegister := middleware.NewRateLimiter(5, time.Hour)
+
+	auth := api.Group("/auth")
+	auth.POST("/register", rlRegister.Middleware(), AuthHandler.RegisterCustomer)
+	auth.POST("/login", rlLogin.Middleware(), AuthHandler.Login)
 }

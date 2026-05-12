@@ -63,9 +63,6 @@ func (s *authService) Register(req *dto.RegisterRequest, userType string) error 
 		UpdatedAt:  helper.TimeNowWIB(),
 		Status:     1,
 		Role:       userType,
-		Address:    req.Address,
-		Phone:      req.Phone,
-		PostalCode: req.PostalCode,
 		VerifiedAt: nil,
 	}
 

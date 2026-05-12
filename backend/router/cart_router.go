@@ -6,6 +6,7 @@ import (
 	"backend/middleware"
 	"backend/repository"
 	"backend/service"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -19,5 +20,6 @@ func CartRouter(api *gin.RouterGroup) {
 
 	Cart.Use(middleware.JWTMiddleware())
 
-	Cart.POST("", CartHandler.Verify)
+	rlVerify := middleware.NewRateLimiter(30, time.Minute)
+	Cart.POST("", rlVerify.Middleware(), CartHandler.Verify)
 }
