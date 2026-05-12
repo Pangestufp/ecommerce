@@ -14,7 +14,7 @@ func OngkirRouter(api *gin.RouterGroup) {
 	OngkirService := service.NewRajaOngkirService(config.ENV.RajaOngkirAPIKey, config.ENV.RajaOngkirURL, config.RedisClient)
 	OngkirHandler := handler.NewRajaOngkirHandler(OngkirService)
 
-	rlOngkir := middleware.NewRateLimiter(30, time.Minute)
+	rlOngkir := middleware.NewRateLimiter(10, time.Minute)
 
 	ongkir := api.Group("/ongkir")
 	ongkir.Use(middleware.JWTMiddleware())
@@ -22,5 +22,6 @@ func OngkirRouter(api *gin.RouterGroup) {
 		ongkir.GET("/province", rlOngkir.Middleware(), OngkirHandler.GetProvince)
 		ongkir.GET("/city/:province_id", rlOngkir.Middleware(), OngkirHandler.GetCity)
 		ongkir.GET("/district/:city_id", rlOngkir.Middleware(), OngkirHandler.GetDistrict)
+		ongkir.GET("/subdistrict/:district_id", rlOngkir.Middleware(), OngkirHandler.GetSubDistrict)
 	}
 }

@@ -35,8 +35,8 @@ func NewAddressService(
 	}
 }
 
-func (s *addressService) validateAndResolveLocation(provinceID, cityID, districtID string) (
-	provIDStr, provName, cityIDStr, cityName, distIDStr, distName, zipCode string, err error,
+func (s *addressService) validateAndResolveLocation(provinceID, cityID, districtID, subDistrictID string) (
+	provIDStr, provName, cityIDStr, cityName, distIDStr, distName, subDistIDStr, subDistName, zipCode string, err error,
 ) {
 	provIDStr, provName, err = s.rajaOngkirService.FindProvinceByID(provinceID)
 	if err != nil {
@@ -48,7 +48,12 @@ func (s *addressService) validateAndResolveLocation(provinceID, cityID, district
 		return
 	}
 
-	distIDStr, distName, zipCode, err = s.rajaOngkirService.FindDistrictByID(cityID, districtID)
+	distIDStr, distName, err = s.rajaOngkirService.FindDistrictByID(cityID, districtID)
+	if err != nil {
+		return
+	}
+
+	subDistIDStr, subDistName, zipCode, err = s.rajaOngkirService.FindSubDistrictByID(districtID, subDistrictID)
 	return
 }
 
@@ -76,9 +81,12 @@ func (s *addressService) CreateAddress(req *dto.CreateAddressRequest, userID str
 	if req.DistrictID == "" {
 		return nil, &errorhandler.BadRequestError{Message: "District ID tidak boleh kosong"}
 	}
+	if req.SubDistrictID == "" {
+		return nil, &errorhandler.BadRequestError{Message: "SubDistrict ID tidak boleh kosong"}
+	}
 
-	provIDStr, provName, cityIDStr, cityName, distIDStr, distName, zipCode, err := s.validateAndResolveLocation(
-		req.ProvinceID, req.CityID, req.DistrictID,
+	provIDStr, provName, cityIDStr, cityName, distIDStr, distName, subDistIDStr, subDistName, zipCode, err := s.validateAndResolveLocation(
+		req.ProvinceID, req.CityID, req.DistrictID, req.SubDistrictID,
 	)
 	if err != nil {
 		return nil, err
@@ -112,6 +120,8 @@ func (s *addressService) CreateAddress(req *dto.CreateAddressRequest, userID str
 		CityName:          cityName,
 		DistrictID:        distIDStr,
 		DistrictName:      distName,
+		SubDistrictID:     subDistIDStr,
+		SubDistrictName:   subDistName,
 		ZipCode:           zipCode,
 		AdditionalAddress: req.AdditionalAddress,
 		IsPrimary:         isPrimary,
@@ -146,12 +156,11 @@ func (s *addressService) UpdateAddress(addressID string, req *dto.UpdateAddressR
 		a.Phone = req.Phone
 	}
 
-	// Kalau salah satu location field berubah, re-validasi semua sekaligus
-	if req.ProvinceID != "" || req.CityID != "" || req.DistrictID != "" {
-		// Pakai value baru kalau ada, fallback ke value lama (convert ke int)
+	if req.ProvinceID != "" || req.CityID != "" || req.DistrictID != "" || req.SubDistrictID != "" {
 		provinceID := req.ProvinceID
 		cityID := req.CityID
 		districtID := req.DistrictID
+		subDistrictID := req.SubDistrictID
 
 		if provinceID == "" {
 			provinceID = a.ProvinceID
@@ -162,9 +171,12 @@ func (s *addressService) UpdateAddress(addressID string, req *dto.UpdateAddressR
 		if districtID == "" {
 			districtID = a.DistrictID
 		}
+		if subDistrictID == "" {
+			subDistrictID = a.SubDistrictID
+		}
 
-		provIDStr, provName, cityIDStr, cityName, distIDStr, distName, zipCode, err := s.validateAndResolveLocation(
-			provinceID, cityID, districtID,
+		provIDStr, provName, cityIDStr, cityName, distIDStr, distName, subDistIDStr, subDistName, zipCode, err := s.validateAndResolveLocation(
+			provinceID, cityID, districtID, subDistrictID,
 		)
 		if err != nil {
 			return nil, err
@@ -176,6 +188,8 @@ func (s *addressService) UpdateAddress(addressID string, req *dto.UpdateAddressR
 		a.CityName = cityName
 		a.DistrictID = distIDStr
 		a.DistrictName = distName
+		a.SubDistrictID = subDistIDStr
+		a.SubDistrictName = subDistName
 		a.ZipCode = zipCode
 	}
 
@@ -252,6 +266,8 @@ func mapToAddressResponse(a entity.UserAddress) *dto.AddressResponse {
 		CityName:          a.CityName,
 		DistrictID:        a.DistrictID,
 		DistrictName:      a.DistrictName,
+		SubDistrictID:     a.SubDistrictID,
+		SubDistrictName:   a.SubDistrictName,
 		ZipCode:           a.ZipCode,
 		AdditionalAddress: a.AdditionalAddress,
 		IsPrimary:         a.IsPrimary,

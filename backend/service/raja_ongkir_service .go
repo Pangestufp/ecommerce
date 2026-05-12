@@ -16,9 +16,11 @@ type RajaOngkirService interface {
 	GetProvince() ([]any, error)
 	GetCity(provinceID string) ([]any, error)
 	GetDistrict(cityID string) ([]any, error)
+	GetSubDistrict(districtID string) ([]any, error)
 	FindProvinceByID(provinceID string) (string, string, error)
 	FindCityByID(provinceID string, cityID string) (string, string, error)
-	FindDistrictByID(cityID string, districtID string) (string, string, string, error)
+	FindDistrictByID(cityID string, districtID string) (string, string, error)
+	FindSubDistrictByID(districtID string, subDistrictID string) (string, string, string, error)
 }
 
 type rajaOngkirService struct {
@@ -70,6 +72,10 @@ func (s *rajaOngkirService) getWithCache(cacheKey, url string, ttl time.Duration
 		return result, nil
 	}
 
+	if err != redis.Nil {
+		return nil, &errorhandler.InternalServerError{Message: "Cache sedang bermasalah, coba lagi"}
+	}
+
 	result, err := s.fetch(url)
 	if err != nil {
 		return nil, err
@@ -105,7 +111,14 @@ func (s *rajaOngkirService) GetDistrict(cityID string) ([]any, error) {
 	)
 }
 
-// FindProvinceByID validasi province ID dan return id string + name
+func (s *rajaOngkirService) GetSubDistrict(districtID string) ([]any, error) {
+	return s.getWithCache(
+		fmt.Sprintf("ongkir:sub-district:%s", districtID),
+		fmt.Sprintf("%s/destination/sub-district/%s", s.baseURL, districtID),
+		7*24*time.Hour,
+	)
+}
+
 func (s *rajaOngkirService) FindProvinceByID(provinceID string) (string, string, error) {
 	provinces, err := s.GetProvince()
 	if err != nil {
@@ -130,7 +143,6 @@ func (s *rajaOngkirService) FindProvinceByID(provinceID string) (string, string,
 	return "", "", &errorhandler.BadRequestError{Message: "Province ID tidak valid"}
 }
 
-// FindCityByID validasi city ID dalam province, return id string + name
 func (s *rajaOngkirService) FindCityByID(provinceID string, cityID string) (string, string, error) {
 	cities, err := s.GetCity(provinceID)
 	if err != nil {
@@ -155,11 +167,11 @@ func (s *rajaOngkirService) FindCityByID(provinceID string, cityID string) (stri
 	return "", "", &errorhandler.BadRequestError{Message: "City ID tidak valid"}
 }
 
-// FindDistrictByID validasi district ID dalam city, return id string + name + zip_code
-func (s *rajaOngkirService) FindDistrictByID(cityID string, districtID string) (string, string, string, error) {
+// FindDistrictByID — zip_code tidak diambil disini, dipindah ke subdistrict
+func (s *rajaOngkirService) FindDistrictByID(cityID string, districtID string) (string, string, error) {
 	districts, err := s.GetDistrict(cityID)
 	if err != nil {
-		return "", "", "", err
+		return "", "", err
 	}
 
 	for _, d := range districts {
@@ -173,10 +185,37 @@ func (s *rajaOngkirService) FindDistrictByID(cityID string, districtID string) (
 		}
 		if fmt.Sprintf("%d", int(id)) == districtID {
 			name, _ := item["name"].(string)
-			zipCode, _ := item["zip_code"].(string)
-			return districtID, name, zipCode, nil
+			return districtID, name, nil
 		}
 	}
 
-	return "", "", "", &errorhandler.BadRequestError{Message: "District ID tidak valid"}
+	return "", "", &errorhandler.BadRequestError{Message: "District ID tidak valid"}
+}
+
+func (s *rajaOngkirService) FindSubDistrictByID(districtID string, subDistrictID string) (string, string, string, error) {
+	subDistricts, err := s.GetSubDistrict(districtID)
+	if err != nil {
+		return "", "", "", err
+	}
+
+	for _, sd := range subDistricts {
+		item, ok := sd.(map[string]any)
+		if !ok {
+			continue
+		}
+		id, ok := item["id"].(float64)
+		if !ok {
+			continue
+		}
+		if fmt.Sprintf("%d", int(id)) == subDistrictID {
+			name, _ := item["name"].(string)
+			zipCode, _ := item["zip_code"].(string)
+			if zipCode == "0" {
+				zipCode = ""
+			}
+			return subDistrictID, name, zipCode, nil
+		}
+	}
+
+	return "", "", "", &errorhandler.BadRequestError{Message: "SubDistrict ID tidak valid"}
 }

@@ -9,6 +9,7 @@ type CreateAddressRequest struct {
 	ProvinceID        string `json:"province_id"`
 	CityID            string `json:"city_id"`
 	DistrictID        string `json:"district_id"`
+	SubDistrictID     string `json:"sub_district_id"`
 	AdditionalAddress string `json:"additional_address"`
 	IsPrimary         int    `json:"is_primary"`
 }
@@ -20,6 +21,7 @@ type UpdateAddressRequest struct {
 	ProvinceID        string `json:"province_id"`
 	CityID            string `json:"city_id"`
 	DistrictID        string `json:"district_id"`
+	SubDistrictID     string `json:"sub_district_id"`
 	AdditionalAddress string `json:"additional_address"`
 	IsPrimary         int    `json:"is_primary"`
 }
@@ -36,6 +38,8 @@ type AddressResponse struct {
 	CityName          string    `json:"city_name"`
 	DistrictID        string    `json:"district_id"`
 	DistrictName      string    `json:"district_name"`
+	SubDistrictID     string    `json:"sub_district_id"`
+	SubDistrictName   string    `json:"sub_district_name"`
 	ZipCode           string    `json:"zip_code"`
 	AdditionalAddress string    `json:"additional_address"`
 	IsPrimary         int       `json:"is_primary"`

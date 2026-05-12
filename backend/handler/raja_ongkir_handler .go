@@ -63,3 +63,19 @@ func (h *rajaOngkirHandler) GetDistrict(c *gin.Context) {
 		Data:       data,
 	}))
 }
+
+func (h *rajaOngkirHandler) GetSubDistrict(c *gin.Context) {
+	districtID := c.Param("district_id")
+
+	data, err := h.service.GetSubDistrict(districtID)
+	if err != nil {
+		errorhandler.ErrorHandler(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, helper.BuildResponse(dto.ResponseParam{
+		StatusCode: http.StatusOK,
+		Message:    "Success Get SubDistrict",
+		Data:       data,
+	}))
+}

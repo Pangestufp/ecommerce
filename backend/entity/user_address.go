@@ -14,6 +14,8 @@ type UserAddress struct {
 	CityName          string
 	DistrictID        string
 	DistrictName      string
+	SubDistrictID     string
+	SubDistrictName   string
 	ZipCode           string
 	AdditionalAddress string
 	IsPrimary         int
