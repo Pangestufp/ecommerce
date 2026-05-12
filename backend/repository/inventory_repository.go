@@ -18,7 +18,7 @@ type InventoryRepository interface {
 	GetByID(batchID string) (*entity.Inventory, error)
 	GetAllByProductID(productID string, cursor *dto.Paginate, search string, limit int) ([]entity.Inventory, error)
 	GetNextSeq(productID string) (int, string, error)
-	// GetHighestCostByProductID mmasukan ke sini
+	GetHighestCostByProductID(productID string) (*entity.Inventory, error)
 
 
 
@@ -183,3 +183,11 @@ func (r *inventoryRepository) GetNextSeq(productID string) (int, string, error) 
 }
 
 // fungsi GetHighestCostByProductID
+func (r *inventoryRepository) GetHighestCostByProductID(productID string) (*entity.Inventory, error){
+	var inv entity.Inventory
+		err := r.db.Where("product_id = ? and stock > 0", productID).Order("cost_price Desc").First(&inv).Error
+		if err != nil {
+			return nil,err
+		}
+	return &inv, nil
+}
