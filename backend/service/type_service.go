@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -102,6 +103,7 @@ func (s *typeService) CreateType(req *dto.TypeRequest, userID string) (*dto.Type
 	return &response, nil
 }
 
+// code agaar setiap change nya kelacak
 func (s *typeService) UpdateType(typeID string, req *dto.TypeRequest, userID string) (*dto.TypeResponse, error) {
 	user, err := s.userRepository.GetUserByID(userID)
 	if err != nil {
@@ -123,16 +125,38 @@ func (s *typeService) UpdateType(typeID string, req *dto.TypeRequest, userID str
 	if err != nil {
 		return nil, &errorhandler.NotFoundError{Message: "Type Not Found"}
 	}
-	oldName := t.TypeName// buat catete log nya 
+	
 
-	if helper.UpperAndTrim(req.TypeCode) != helper.UpperAndTrim(t.TypeCode) {
-		existing, _ := s.repository.GetTypeByTypeCode(helper.UpperAndTrim(req.TypeCode))
-		if existing != nil {
-			return nil, &errorhandler.ForbiddenError{Message: "Type Code Telah digunakan"}
-		}
-	}
+//penambahan
+	var changes []string
+	newCode := helper.UpperAndTrim(req.TypeCode) 
+    if newCode != t.TypeCode { 
+        existing, _ := s.repository.GetTypeByTypeCode(newCode)
+        if existing != nil {
+            return nil, &errorhandler.ForbiddenError{Message: "Type Code Telah digunakan"}
+        }
+        changes = append(changes, fmt.Sprintf("Type Code: '%s' → '%s'", t.TypeCode, newCode)) 
+    }
 
-	t.TypeCode = helper.UpperAndTrim(req.TypeCode)
+	// Cek perubahan Type Name
+    if req.TypeName != t.TypeName { // // TAMBAH: Bandingkan nama
+        changes = append(changes, fmt.Sprintf("Type Name: '%s' → '%s'", t.TypeName, req.TypeName)) // // TAMBAH: Masukkan ke list perubahan
+    }
+
+    
+    if req.TypeDesc != t.TypeDesc { 
+        changes = append(changes, fmt.Sprintf("Description: '%s' → '%s'", t.TypeDesc, req.TypeDesc)) // // TAMBAH: Masukkan ke list perubahan
+    }
+
+	// if helper.UpperAndTrim(req.TypeCode) != helper.UpperAndTrim(t.TypeCode) {
+	// 	existing, _ := s.repository.GetTypeByTypeCode(helper.UpperAndTrim(req.TypeCode))
+	// 	if existing != nil {
+	// 		return nil, &errorhandler.ForbiddenError{Message: "Type Code Telah digunakan"}
+	// 	}
+	// }
+
+	// t.TypeCode = helper.UpperAndTrim(req.TypeCode)
+	t.TypeCode = newCode
 	t.TypeName = req.TypeName
 	t.TypeDesc = req.TypeDesc
 	t.UpdatedAt = helper.TimeNowWIB()
@@ -141,12 +165,19 @@ func (s *typeService) UpdateType(typeID string, req *dto.TypeRequest, userID str
 		return nil, &errorhandler.InternalServerError{Message: err.Error()}
 	}
 
+        var note string 
+        if len(changes) > 0 { 
+            note = fmt.Sprintf("Mengubah tipe %s: %s", t.TypeName, strings.Join(changes, "; ")) // // UBAH: Gabungkan detail perubahan
+        } else {
+            note = fmt.Sprintf("Mengubah tipe %s (tidak ada perubahan data)", t.TypeName) // // TAMBAH: Jika user klik simpan tanpa edit apapun
+        }
+
 	s.logRepository.Create(&entity.Log{
 		LogID:         uuid.New().String(),
 		ReferenceType: "TYPE",
 		ReferenceID:   t.TypeID,
 		ReferenceName: t.TypeName,
-		Note:          fmt.Sprintf("Mengubah tipe dari %s menjadi %s", oldName, t.TypeName),
+		Note:          note,
 		CreatedAt:     helper.TimeNowWIB(),
 		CreatedBy:     userID,
 		CreatedName:   user.Name,
@@ -163,7 +194,6 @@ func (s *typeService) UpdateType(typeID string, req *dto.TypeRequest, userID str
 	s.redis.Del(ctx, cacheKey)
 
 	return s.GetTypeByID(typeID)
-
 }
 
 func (s *typeService) DeleteType(typeID string, userID string) error {

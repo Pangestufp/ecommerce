@@ -4,6 +4,7 @@ import (
 	"backend/dto"
 	"backend/entity"
 	"backend/errorhandler"
+	"backend/helper"
 	"backend/repository"
 )
 
@@ -100,14 +101,18 @@ func (s *logService) formatPaginationResponse(logs []entity.Log, cursor *dto.Pag
 	responses := make([]dto.LogResponse, 0, len(logs))
 	for _, l := range logs {
 		responses = append(responses, dto.LogResponse{
-			LogID:         l.LogID,
-			ReferenceType: l.ReferenceType,
-			ReferenceID:   l.ReferenceID,
-			ReferenceName: l.ReferenceName,
-			Note:          l.Note,
-			CreatedAt:     l.CreatedAt,
-			CreatedBy:     l.CreatedBy,
-			CreatedName:   l.CreatedName,
+			LogID:           l.LogID,
+			ReferenceType:   l.ReferenceType,
+			ReferenceID:     l.ReferenceID,
+			ReferenceName:   l.ReferenceName,
+			Note:            l.Note,
+			CreatedAt:       l.CreatedAt,
+			CreatedBy:       l.CreatedBy,
+			CreatedName:     l.CreatedName,
+			SourceID:        l.SourceID,
+			SourceName:      l.SourceName,
+			SourceType:      l.SourceType,
+			CreatedAtFormat: helper.FormatTanggalIndo(l.CreatedAt),
 		})
 	}
 

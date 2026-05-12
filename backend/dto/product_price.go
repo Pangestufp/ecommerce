@@ -19,4 +19,5 @@ type ProductPriceResponse struct {
 	CreatedAt          time.Time       `json:"created_at"`
 	CreatedBy          string          `json:"created_by"`
 	CreatedName        string          `json:"created_name"`
+	CreatedAtFormat    string          `json:"created_at_format"`
 }
