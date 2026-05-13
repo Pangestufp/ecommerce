@@ -1,12 +1,15 @@
 package service
 
 import (
+	"backend/dto"
 	"backend/errorhandler"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	neturl "net/url"
+	"strings"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -21,6 +24,7 @@ type RajaOngkirService interface {
 	FindCityByID(provinceID string, cityID string) (string, string, error)
 	FindDistrictByID(cityID string, districtID string) (string, string, error)
 	FindSubDistrictByID(districtID string, subDistrictID string) (string, string, string, error)
+	CalculateShippingCost(req *dto.ShippingCostRequest) ([]dto.ShippingOption, error)
 }
 
 type rajaOngkirService struct {
@@ -218,4 +222,46 @@ func (s *rajaOngkirService) FindSubDistrictByID(districtID string, subDistrictID
 	}
 
 	return "", "", "", &errorhandler.BadRequestError{Message: "SubDistrict ID tidak valid"}
+}
+
+func (s *rajaOngkirService) CalculateShippingCost(req *dto.ShippingCostRequest) ([]dto.ShippingOption, error) {
+	url := fmt.Sprintf("%s/calculate/district/domestic-cost", s.baseURL)
+
+	formData := neturl.Values{}
+	formData.Set("origin", req.Origin)
+	formData.Set("destination", req.Destination)
+	formData.Set("weight", fmt.Sprintf("%d", req.Weight))
+	formData.Set("courier", "jne:sicepat:ide:sap:jnt:ninja:tiki:lion:anteraja:pos:ncs:rex:rpx:sentral:star:wahana:dse")
+	formData.Set("price", "lowest")
+
+	httpReq, err := http.NewRequest("POST", url, strings.NewReader(formData.Encode()))
+	if err != nil {
+		return nil, &errorhandler.InternalServerError{Message: err.Error()}
+	}
+	httpReq.Header.Set("key", s.apiKey)
+	httpReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		return nil, &errorhandler.InternalServerError{Message: err.Error()}
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, &errorhandler.InternalServerError{Message: err.Error()}
+	}
+
+	var result struct {
+		Data []dto.ShippingOption `json:"data"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, &errorhandler.InternalServerError{Message: err.Error()}
+	}
+
+	if len(result.Data) == 0 {
+		return nil, &errorhandler.NotFoundError{Message: "Tidak ada layanan pengiriman tersedia untuk rute ini"}
+	}
+
+	return result.Data, nil
 }
