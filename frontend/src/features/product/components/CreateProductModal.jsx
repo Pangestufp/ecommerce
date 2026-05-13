@@ -9,6 +9,9 @@ export default function CreateProductModal({ onSubmit, onClose, loading, types, 
     product_code: "",
     product_name: "",
     weight_gram: "",
+    length_cm: "",
+    width_cm: "",
+    height_cm: "",
     type_id: "",
     description: "",
   });
@@ -102,6 +105,33 @@ export default function CreateProductModal({ onSubmit, onClose, loading, types, 
             type="number"
             placeholder="Masukkan berat dalam gram"
             value={form.weight_gram}
+            onChange={handleChange}
+          />
+
+          <TextField
+            label="Panjang (cm)"
+            name="length_cm"
+            type="number"
+            placeholder="Masukkan Panjang dalam Cm"
+            value={form.length_cm}
+            onChange={handleChange}
+          />
+
+          <TextField
+            label="Lebar (cm)"
+            name="width_cm"
+            type="number"
+            placeholder="Masukkan Lebar dalam Cm"
+            value={form.width_cm}
+            onChange={handleChange}
+          />
+
+          <TextField
+            label="Tinggi (cm)"
+            name="height_cm"
+            type="number"
+            placeholder="Masukkan tinggi dalam Cm"
+            value={form.height_cm}
             onChange={handleChange}
           />
 

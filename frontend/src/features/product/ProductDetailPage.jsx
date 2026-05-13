@@ -203,6 +203,18 @@ export default function ProductDetailPage() {
                     <p className="text-xs text-gray-400 mb-0.5">Berat</p>
                     <p className="text-gray-700">{product.weight_gram} g</p>
                   </div>
+                  <div>
+                    <p className="text-xs text-gray-400 mb-0.5">Panjang</p>
+                    <p className="text-gray-700">{product.length_cm_format}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-400 mb-0.5">Lebar</p>
+                    <p className="text-gray-700">{product.width_cm_format}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-400 mb-0.5">Tinggi</p>
+                    <p className="text-gray-700">{product.height_cm_format}</p>
+                  </div>
                 </div>
               </div>
             </div>

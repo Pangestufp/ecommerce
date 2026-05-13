@@ -170,6 +170,10 @@ export default function CatalogDetailPage() {
                     <p className="text-xs text-gray-400">Berat</p>
                     <p className="text-sm font-medium text-gray-800">{product.weight_gram}g</p>
                   </div>
+                  <div>
+                    <p className="text-xs text-gray-400">Dimensi</p>
+                    <p className="text-sm font-medium text-gray-800">{product.length_cm_format} x {product.width_cm_format} x {product.height_cm_format}</p>
+                  </div>
                 </div>
 
                 <p className={`text-sm text-gray-600 leading-relaxed text-left ${!showMore ? "line-clamp-2" : ""}`}>

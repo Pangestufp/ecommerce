@@ -5,6 +5,7 @@ import (
 	"backend/entity"
 	"backend/errorhandler"
 	"backend/helper"
+	"fmt"
 	"log"
 
 	"gorm.io/gorm"
@@ -146,6 +147,9 @@ func (r *productRepository) GetProductEnriched(productID string) (*dto.ProductEn
 			p.product_name,
 			p.product_slug,
 			p.weight_gram,
+			p.length_cm,
+			p.width_cm,
+			p.height_cm,
 			p.type_id,
 			t.type_name,
 			t.type_code,
@@ -233,6 +237,9 @@ func (r *productRepository) GetProductEnriched(productID string) (*dto.ProductEn
 	product.BestDiscountFormat = helper.FormatRupiah(product.BestDiscount)
 	product.BestPriceFormat = helper.FormatRupiah(product.BestPrice)
 	product.ProductPriceFormat = helper.FormatRupiah(product.ProductPrice)
+	product.LengthCmFormat = fmt.Sprintf("%dcm", product.LengthCm)
+	product.WidthCmFormat = fmt.Sprintf("%dcm", product.WidthCm)
+	product.HeightCmFormat = fmt.Sprintf("%dcm", product.HeightCm)
 
 	return &product, nil
 }
@@ -260,6 +267,9 @@ func (r *productRepository) GetAllProductsPaginated(cursor *dto.Paginate, search
 			p.product_name,
 			p.product_slug,
 			p.weight_gram,
+			p.length_cm,
+			p.width_cm,
+			p.height_cm,
 			p.type_id,
 			t.type_code || ' - ' || t.type_name AS type_name,
 			p.description,
@@ -357,6 +367,9 @@ func (r *productRepository) GetAllProductsPaginated(cursor *dto.Paginate, search
 
 	for i := range products {
 		products[i].ProductPriceFormat = helper.FormatRupiah(products[i].ProductPrice)
+		products[i].LengthCmFormat = fmt.Sprintf("%dcm", products[i].LengthCm)
+		products[i].WidthCmFormat = fmt.Sprintf("%dcm", products[i].WidthCm)
+		products[i].HeightCmFormat = fmt.Sprintf("%dcm", products[i].HeightCm)
 	}
 
 	return products, nil
@@ -377,6 +390,9 @@ func (r *productRepository) GetProductsEnrichedBatch(productIDs []string) ([]*dt
 			p.product_name,
 			p.product_slug,
 			p.weight_gram,
+			p.length_cm,
+			p.width_cm,
+			p.height_cm,
 			p.type_id,
 			t.type_name,
 			t.type_code,
@@ -489,6 +505,9 @@ func (r *productRepository) GetProductsEnrichedBatch(productIDs []string) ([]*dt
 			p.BestDiscountFormat = helper.FormatRupiah(p.BestDiscount)
 			p.BestPriceFormat = helper.FormatRupiah(p.BestPrice)
 			p.ProductPriceFormat = helper.FormatRupiah(p.ProductPrice)
+			p.LengthCmFormat = fmt.Sprintf("%dcm", p.LengthCm)
+			p.WidthCmFormat = fmt.Sprintf("%dcm", p.WidthCm)
+			p.HeightCmFormat = fmt.Sprintf("%dcm", p.HeightCm)
 			products = append(products, p)
 		}
 	}

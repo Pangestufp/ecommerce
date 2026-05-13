@@ -10,6 +10,9 @@ type Product struct {
 	WeightGram  int
 	TypeID      string
 	Description string
+	LengthCm    int
+	WidthCm     int
+	HeightCm    int
 	Status      int
 	CreatedAt   time.Time
 	UpdatedAt   time.Time

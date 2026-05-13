@@ -12,6 +12,12 @@ type ProductEnrichedForES struct {
 	ProductName        string                 `json:"product_name"`
 	ProductSlug        string                 `json:"product_slug"`
 	WeightGram         int                    `json:"weight_gram"`
+	LengthCm           int                    `json:"length_cm"`
+	WidthCm            int                    `json:"width_cm"`
+	HeightCm           int                    `json:"height_cm"`
+	LengthCmFormat     string                 `json:"length_cm_format"`
+	WidthCmFormat      string                 `json:"width_cm_format"`
+	HeightCmFormat     string                 `json:"height_cm_format"`
 	TypeID             string                 `json:"type_id"`
 	TypeName           string                 `json:"type_name"`
 	TypeCode           string                 `json:"type_code"`

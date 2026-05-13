@@ -27,6 +27,9 @@ type CreateProductRequest struct {
 	ProductCode string   `json:"product_code"`
 	ProductName string   `json:"product_name"`
 	WeightGram  int      `json:"weight_gram"`
+	LengthCm    int      `json:"length_cm"`
+	WidthCm     int      `json:"width_cm"`
+	HeightCm    int      `json:"height_cm"`
 	TypeID      string   `json:"type_id"`
 	Description string   `json:"description"`
 	Images      []string `json:"images"`
@@ -36,25 +39,34 @@ type UpdateProductRequest struct {
 	ProductName string   `json:"product_name"`
 	ProductCode string   `json:"product_code"`
 	WeightGram  int      `json:"weight_gram"`
+	LengthCm    int      `json:"length_cm"`
+	WidthCm     int      `json:"width_cm"`
+	HeightCm    int      `json:"height_cm"`
 	TypeID      string   `json:"type_id"`
 	Description string   `json:"description"`
 	Images      []string `json:"images"`
 }
 
 type ProductResponse struct {
-	ProductID   string                 `json:"product_id"`
-	ProductCode string                 `json:"product_code"`
-	ProductName string                 `json:"product_name"`
-	ProductSlug string                 `json:"product_slug"`
-	WeightGram  int                    `json:"weight_gram"`
-	TypeID      string                 `json:"type_id"`
-	TypeName    string                 `json:"type_name"`
-	TypeCode    string                 `json:"type_code"`
-	Description string                 `json:"description"`
-	Status      int                    `json:"status"`
-	Images      []ProductImageResponse `json:"images"`
-	CreatedAt   time.Time              `json:"created_at"`
-	UpdatedAt   time.Time              `json:"updated_at"`
+	ProductID      string                 `json:"product_id"`
+	ProductCode    string                 `json:"product_code"`
+	ProductName    string                 `json:"product_name"`
+	ProductSlug    string                 `json:"product_slug"`
+	WeightGram     int                    `json:"weight_gram"`
+	LengthCm       int                    `json:"length_cm"`
+	WidthCm        int                    `json:"width_cm"`
+	HeightCm       int                    `json:"height_cm"`
+	LengthCmFormat string                 `json:"length_cm_format"`
+	WidthCmFormat  string                 `json:"width_cm_format"`
+	HeightCmFormat string                 `json:"height_cm_format"`
+	TypeID         string                 `json:"type_id"`
+	TypeName       string                 `json:"type_name"`
+	TypeCode       string                 `json:"type_code"`
+	Description    string                 `json:"description"`
+	Status         int                    `json:"status"`
+	Images         []ProductImageResponse `json:"images"`
+	CreatedAt      time.Time              `json:"created_at"`
+	UpdatedAt      time.Time              `json:"updated_at"`
 }
 
 type ProductImageResponse struct {
@@ -70,6 +82,12 @@ type ProductListRow struct {
 	ProductSlug        string          `json:"product_slug"`
 	WeightGram         int             `json:"weight_gram"`
 	TypeID             string          `json:"type_id"`
+	LengthCm           int             `json:"length_cm"`
+	WidthCm            int             `json:"width_cm"`
+	HeightCm           int             `json:"height_cm"`
+	LengthCmFormat     string          `json:"length_cm_format" gorm:"-"`
+	WidthCmFormat      string          `json:"width_cm_format" gorm:"-"`
+	HeightCmFormat     string          `json:"height_cm_format" gorm:"-"`
 	TypeName           string          `json:"type_name"`
 	Description        string          `json:"description"`
 	Status             int             `json:"status"`

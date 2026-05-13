@@ -195,6 +195,18 @@ func (s *productService) Create(req dto.CreateProductRequest, userID string) (*d
 		return nil, &errorhandler.BadRequestError{Message: "Weight Gram kosong"}
 	}
 
+	if req.HeightCm < 0 {
+		return nil, &errorhandler.BadRequestError{Message: "Tinggi produk kosong"}
+	}
+
+	if req.LengthCm < 0 {
+		return nil, &errorhandler.BadRequestError{Message: "Panjang produk kosong"}
+	}
+
+	if req.WidthCm < 0 {
+		return nil, &errorhandler.BadRequestError{Message: "Lebar produk kosong"}
+	}
+
 	user, err := s.userRepository.GetUserByID(userID)
 	if err != nil {
 		return nil, &errorhandler.NotFoundError{Message: "User Invalid"}
@@ -211,12 +223,17 @@ func (s *productService) Create(req dto.CreateProductRequest, userID string) (*d
 		return nil, &errorhandler.ForbiddenError{Message: "Product Name Telah digunakan"}
 	}
 
+	//
+
 	product := entity.Product{
 		ProductID:   uuid.New().String(),
 		ProductCode: helper.UpperAndTrim(req.ProductCode),
 		ProductName: helper.TitleCase(req.ProductName),
 		ProductSlug: slug.Make(helper.TitleCase(req.ProductName)),
 		WeightGram:  req.WeightGram,
+		LengthCm:    req.LengthCm,
+		WidthCm:     req.WidthCm,
+		HeightCm:    req.HeightCm,
 		TypeID:      req.TypeID,
 		Description: req.Description,
 		Status:      1,
@@ -245,6 +262,9 @@ func (s *productService) Create(req dto.CreateProductRequest, userID string) (*d
 			Type:      "create product",
 		}
 
+	}()
+
+	go func() {
 		note := fmt.Sprintf("Membuat produk baru %s", product.ProductName)
 		s.logRepository.Create(&entity.Log{
 			LogID:         uuid.New().String(),
@@ -259,7 +279,6 @@ func (s *productService) Create(req dto.CreateProductRequest, userID string) (*d
 			SourceName:    product.ProductName,
 			SourceType:    "PRODUCT",
 		})
-
 	}()
 
 	return s.GetByID(product.ProductID)
@@ -287,6 +306,18 @@ func (s *productService) Update(productID string, req dto.UpdateProductRequest, 
 		return nil, &errorhandler.BadRequestError{Message: "Weight Gram kosong"}
 	}
 
+	if req.HeightCm < 0 {
+		return nil, &errorhandler.BadRequestError{Message: "Tinggi produk kosong"}
+	}
+
+	if req.LengthCm < 0 {
+		return nil, &errorhandler.BadRequestError{Message: "Panjang produk kosong"}
+	}
+
+	if req.WidthCm < 0 {
+		return nil, &errorhandler.BadRequestError{Message: "Lebar produk kosong"}
+	}
+
 	user, err := s.userRepository.GetUserByID(userID)
 	if err != nil {
 		return nil, &errorhandler.NotFoundError{Message: "User Invalid"}
@@ -312,7 +343,6 @@ func (s *productService) Update(productID string, req dto.UpdateProductRequest, 
 	}
 
 	// Catat perubahan sebelum data di-update
-
 
 	var changes []string
 
@@ -344,6 +374,18 @@ func (s *productService) Update(productID string, req dto.UpdateProductRequest, 
 		changes = append(changes, fmt.Sprintf("Weight Gram: '%d' → '%d'", product.WeightGram, req.WeightGram))
 	}
 
+	if req.HeightCm != product.HeightCm {
+		changes = append(changes, fmt.Sprintf("Height Cm: '%d' → '%d'", product.HeightCm, req.HeightCm))
+	}
+
+	if req.LengthCm != product.LengthCm {
+		changes = append(changes, fmt.Sprintf("Length Cm: '%d' → '%d'", product.LengthCm, req.LengthCm))
+	}
+
+	if req.WidthCm != product.WidthCm {
+		changes = append(changes, fmt.Sprintf("Width Cm: '%d' → '%d'", product.WidthCm, req.WidthCm))
+	}
+
 	if len(req.Images) > 0 {
 		changes = append(changes, "Images: diperbarui")
 	}
@@ -352,6 +394,9 @@ func (s *productService) Update(productID string, req dto.UpdateProductRequest, 
 	product.ProductCode = helper.UpperAndTrim(req.ProductCode)
 	product.ProductSlug = slug.Make(helper.TitleCase(req.ProductName))
 	product.WeightGram = req.WeightGram
+	product.LengthCm = req.LengthCm
+	product.WidthCm = req.WidthCm
+	product.HeightCm = req.HeightCm
 	product.TypeID = req.TypeID
 	product.Description = req.Description
 	product.UpdatedAt = helper.TimeNowWIB()
@@ -375,10 +420,6 @@ func (s *productService) Update(productID string, req dto.UpdateProductRequest, 
 
 			if len(images) > 0 {
 				s.repo.CreateProductImages(images)
-
-				if len(oldImages) != len(req.Images) {
-					changes = append(changes, "Mengubah foto Produk")
-				}
 			}
 
 			server.Instance.ProductEventChan <- &dto.ProductEvent{
@@ -387,7 +428,10 @@ func (s *productService) Update(productID string, req dto.UpdateProductRequest, 
 			}
 		}
 
-		// Buat note log berdasarkan perubahan yang terjadi
+	}()
+
+	go func() {
+
 		var note string
 		if len(changes) > 0 {
 			note = fmt.Sprintf("Mengubah produk %s: %s", product.ProductName, strings.Join(changes, "; "))
@@ -408,6 +452,7 @@ func (s *productService) Update(productID string, req dto.UpdateProductRequest, 
 			SourceName:    product.ProductName,
 			SourceType:    "PRODUCT",
 		})
+
 	}()
 
 	return s.GetByID(productID)
@@ -472,19 +517,25 @@ func (s *productService) GetByID(productID string) (*dto.ProductResponse, error)
 	}
 
 	return &dto.ProductResponse{
-		ProductID:   product.ProductID,
-		ProductCode: product.ProductCode,
-		ProductName: product.ProductName,
-		ProductSlug: product.ProductSlug,
-		WeightGram:  product.WeightGram,
-		TypeID:      product.TypeID,
-		TypeName:    TypeName,
-		TypeCode:    TypeCode,
-		Description: product.Description,
-		Status:      product.Status,
-		Images:      imageResponses,
-		CreatedAt:   product.CreatedAt,
-		UpdatedAt:   product.UpdatedAt,
+		ProductID:      product.ProductID,
+		ProductCode:    product.ProductCode,
+		ProductName:    product.ProductName,
+		ProductSlug:    product.ProductSlug,
+		WeightGram:     product.WeightGram,
+		TypeID:         product.TypeID,
+		TypeName:       TypeName,
+		TypeCode:       TypeCode,
+		LengthCm:       product.LengthCm,
+		WidthCm:        product.WidthCm,
+		HeightCm:       product.HeightCm,
+		LengthCmFormat: fmt.Sprintf("%dcm", product.LengthCm),
+		WidthCmFormat:  fmt.Sprintf("%dcm", product.WidthCm),
+		HeightCmFormat: fmt.Sprintf("%dcm", product.HeightCm),
+		Description:    product.Description,
+		Status:         product.Status,
+		Images:         imageResponses,
+		CreatedAt:      product.CreatedAt,
+		UpdatedAt:      product.UpdatedAt,
 	}, nil
 
 }
