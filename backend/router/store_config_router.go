@@ -14,7 +14,8 @@ import (
 
 func StoreConfigRouter(api *gin.RouterGroup) {
 	StoreConfigRepository := repository.NewStoreConfigRepository(config.DB)
-	StoreConfigService := service.NewStoreConfigService(StoreConfigRepository, config.RedisClient)
+	OngkirService := service.NewRajaOngkirService(config.ENV.RajaOngkirAPIKey, config.ENV.RajaOngkirURL, config.RedisClient)
+	StoreConfigService := service.NewStoreConfigService(StoreConfigRepository, OngkirService, config.RedisClient)
 	StoreConfigHandler := handler.NewStoreConfigHandler(StoreConfigService)
 
 	StoreConfig := api.Group("/store-config")

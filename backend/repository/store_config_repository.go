@@ -41,9 +41,17 @@ func (r *storeConfigRepository) UpdateConfig(config *entity.StoreConfig) error {
 	return r.db.Model(&entity.StoreConfig{}).
 		Where("config_id = ?", config.ConfigID).
 		Updates(map[string]interface{}{
-			"origin":    config.Origin,
-			"address":   config.Address,
-			"shop_name": config.ShopName,
-			"city_id":   config.CityID,
+			"shop_name":          config.ShopName,
+			"phone":              config.Phone,
+			"province_id":        config.ProvinceID,
+			"province_name":      config.ProvinceName,
+			"city_id":            config.CityID,
+			"city_name":          config.CityName,
+			"district_id":        config.DistrictID,
+			"district_name":      config.DistrictName,
+			"sub_district_id":    config.SubDistrictID,
+			"sub_district_name":  config.SubDistrictName,
+			"zip_code":           config.ZipCode,
+			"additional_address": config.AdditionalAddress,
 		}).Error
 }
