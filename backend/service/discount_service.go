@@ -140,7 +140,7 @@ func (s *discountService) Create(req *dto.CreateDiscountRequest, userID string) 
 	originalPrice := price.ProductPrice
 	var discountAmount decimal.Decimal
 
-	if discount.DiscountValue.LessThan(decimal.NewFromInt(1)) {
+	if discount.DiscountType == helper.Percentage() {
 		discountAmount = originalPrice.Mul(discount.DiscountValue)
 	} else {
 		discountAmount = discount.DiscountValue
@@ -191,6 +191,7 @@ func (s *discountService) Create(req *dto.CreateDiscountRequest, userID string) 
 		DiscountValueFormat:  discountValueFormat,
 		DiscountAmountFormat: discountAmountFormat,
 		FinalValue:           finalValue,
+		FinalAmount:          finalPrice,
 		StartAtFormat:        helper.FormatTanggalIndo(discount.StartAt),
 		ExpiredAtFormat:      helper.FormatTanggalIndo(discount.ExpiredAt),
 		StatusFormat:         statusFormat,
@@ -323,7 +324,7 @@ func (s *discountService) GetAllByProductID(productID string, cursor *dto.Pagina
 		originalPrice := price.ProductPrice
 		var discountAmount decimal.Decimal
 
-		if discount.DiscountValue.LessThan(decimal.NewFromInt(1)) {
+		if discount.DiscountType == helper.Percentage() {
 			discountAmount = originalPrice.Mul(discount.DiscountValue)
 		} else {
 			discountAmount = discount.DiscountValue
@@ -352,6 +353,7 @@ func (s *discountService) GetAllByProductID(productID string, cursor *dto.Pagina
 			DiscountValueFormat:  discountValueFormat,
 			DiscountAmountFormat: discountAmountFormat,
 			FinalValue:           finalValue,
+			FinalAmount:          finalPrice,
 			StartAtFormat:        helper.FormatTanggalIndo(discount.StartAt),
 			ExpiredAtFormat:      helper.FormatTanggalIndo(discount.ExpiredAt),
 			StatusFormat:         statusFormat,

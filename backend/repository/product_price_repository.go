@@ -13,6 +13,7 @@ type ProductPriceRepository interface {
 	Create(price *entity.ProductPrice) error
 	GetLatestByProductID(productID string) (*entity.ProductPrice, error)
 	GetAllByProductID(productID string, cursor *dto.Paginate, limit int) ([]entity.ProductPrice, error)
+	GetLatestByProductIDs(productIDs []string) ([]entity.ProductPrice, error)
 }
 
 type productPriceRepository struct {
@@ -78,5 +79,17 @@ func (r *productPriceRepository) GetAllByProductID(productID string, cursor *dto
 		}
 	}
 
+	return prices, nil
+}
+
+func (r *productPriceRepository) GetLatestByProductIDs(productIDs []string) ([]entity.ProductPrice, error) {
+	var prices []entity.ProductPrice
+	err := r.db.
+		Where("product_id IN ?", productIDs).
+		Order("product_id, created_at DESC").
+		Find(&prices).Error
+	if err != nil {
+		return nil, err
+	}
 	return prices, nil
 }

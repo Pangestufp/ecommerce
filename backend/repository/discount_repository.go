@@ -6,6 +6,7 @@ import (
 	"backend/errorhandler"
 	"backend/helper"
 	"errors"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -15,6 +16,8 @@ type DiscountRepository interface {
 	Delete(discountID string) error
 	GetByID(discountID string) (*entity.Discount, error)
 	GetAllByProductID(productID string, cursor *dto.Paginate, search string, limit int) ([]entity.Discount, error)
+	GetAllActiveByProductID(productID string, now time.Time) ([]entity.Discount, error)
+	GetActiveDiscountsByProductIDs(productIDs []string, now time.Time) ([]entity.Discount, error)
 }
 
 type discountRepository struct {
@@ -95,5 +98,29 @@ func (r *discountRepository) GetAllByProductID(productID string, cursor *dto.Pag
 		}
 	}
 
+	return discounts, nil
+}
+
+func (r *discountRepository) GetAllActiveByProductID(productID string, now time.Time) ([]entity.Discount, error) {
+
+	var discounts []entity.Discount
+
+	err := r.db.Where("status = 1 AND product_id = ? AND expired_at >= ? AND start_at <= ?", productID, now, now).Find(&discounts).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return discounts, nil
+}
+
+func (r *discountRepository) GetActiveDiscountsByProductIDs(productIDs []string, now time.Time) ([]entity.Discount, error) {
+	var discounts []entity.Discount
+	err := r.db.
+		Where("status = 1 AND product_id IN ? AND expired_at >= ? AND start_at <= ?", productIDs, now, now).
+		Find(&discounts).Error
+	if err != nil {
+		return nil, err
+	}
 	return discounts, nil
 }

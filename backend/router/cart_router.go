@@ -20,6 +20,6 @@ func CartRouter(api *gin.RouterGroup) {
 
 	Cart.Use(middleware.JWTMiddleware())
 
-	rlVerify := middleware.NewRateLimiter(30, time.Minute)
+	rlVerify := middleware.NewRateLimiter(20, time.Minute)
 	Cart.POST("", rlVerify.Middleware(), CartHandler.Verify)
 }

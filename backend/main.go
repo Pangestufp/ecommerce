@@ -42,6 +42,7 @@ func main() {
 	router.OngkirRouter(api)
 	router.UserAddressRouter(api)
 	router.CourierRouter(api)
+	router.CheckoutRouter(api)
 
 	server.Initialize(config.DB)
 

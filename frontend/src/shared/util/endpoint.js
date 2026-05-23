@@ -57,7 +57,7 @@ class Endpoints {
 
   static CART = {
     VERIFY: `/api/verify-cart`,
-    CHECKOUT: `/api/verify-cart`,
+    CHECKOUT: `/api/verify-checkout`,
   }
 
 }

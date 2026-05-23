@@ -26,6 +26,7 @@ type DiscountResponse struct {
 	StartAt              time.Time       `json:"start_at"`
 	ExpiredAt            time.Time       `json:"expired_at"`
 	FinalValue           string          `json:"final_value"`
+	FinalAmount          decimal.Decimal `json:"final_amount"`
 	StartAtFormat        string          `json:"start_at_format"`
 	ExpiredAtFormat      string          `json:"expired_at_format"`
 	Status               int             `json:"status"`
