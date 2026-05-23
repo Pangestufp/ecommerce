@@ -4,6 +4,7 @@ import (
 	"backend/config"
 	"backend/handler"
 	"backend/middleware"
+	"backend/repository"
 	"backend/service"
 	"time"
 
@@ -11,7 +12,9 @@ import (
 )
 
 func OngkirRouter(api *gin.RouterGroup) {
-	OngkirService := service.NewRajaOngkirService(config.ENV.RajaOngkirAPIKey, config.ENV.RajaOngkirURL, config.RedisClient)
+	// di router yang instantiate RajaOngkirService
+	CourierRepository := repository.NewCourierRepository(config.DB)
+	OngkirService := service.NewRajaOngkirService(config.ENV.RajaOngkirAPIKey, config.ENV.RajaOngkirURL, config.RedisClient, CourierRepository)
 	OngkirHandler := handler.NewRajaOngkirHandler(OngkirService)
 
 	rlOngkir := middleware.NewRateLimiter(10, time.Minute)

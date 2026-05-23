@@ -3,6 +3,7 @@ package service
 import (
 	"backend/dto"
 	"backend/errorhandler"
+	"backend/repository"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -28,16 +29,18 @@ type RajaOngkirService interface {
 }
 
 type rajaOngkirService struct {
-	apiKey  string
-	baseURL string
-	redis   *redis.Client
+	apiKey      string
+	baseURL     string
+	redis       *redis.Client
+	courierRepo repository.CourierRepository // inject courier repo
 }
 
-func NewRajaOngkirService(apiKey string, url string, redis *redis.Client) *rajaOngkirService {
+func NewRajaOngkirService(apiKey string, url string, redis *redis.Client, courierRepo repository.CourierRepository) *rajaOngkirService {
 	return &rajaOngkirService{
-		apiKey:  apiKey,
-		baseURL: url,
-		redis:   redis,
+		apiKey:      apiKey,
+		baseURL:     url,
+		redis:       redis,
+		courierRepo: courierRepo,
 	}
 }
 
@@ -171,7 +174,6 @@ func (s *rajaOngkirService) FindCityByID(provinceID string, cityID string) (stri
 	return "", "", &errorhandler.BadRequestError{Message: "City ID tidak valid"}
 }
 
-// FindDistrictByID — zip_code tidak diambil disini, dipindah ke subdistrict
 func (s *rajaOngkirService) FindDistrictByID(cityID string, districtID string) (string, string, error) {
 	districts, err := s.GetDistrict(cityID)
 	if err != nil {
@@ -224,14 +226,46 @@ func (s *rajaOngkirService) FindSubDistrictByID(districtID string, subDistrictID
 	return "", "", "", &errorhandler.BadRequestError{Message: "SubDistrict ID tidak valid"}
 }
 
+func (s *rajaOngkirService) getActiveCourierString() (string, error) {
+	couriers, err := s.courierRepo.GetActiveCouriers()
+	if err != nil {
+		return "", &errorhandler.InternalServerError{Message: "Gagal mengambil data kurir"}
+	}
+	if len(couriers) == 0 {
+		return "", &errorhandler.NotFoundError{Message: "Tidak ada kurir aktif"}
+	}
+
+	codes := make([]string, len(couriers))
+	for i, c := range couriers {
+		codes[i] = c.Code
+	}
+	return strings.Join(codes, ":"), nil
+}
+
 func (s *rajaOngkirService) CalculateShippingCost(req *dto.ShippingCostRequest) ([]dto.ShippingOption, error) {
+
+	cacheKey := fmt.Sprintf("ongkir:cost:%s:%s:%d", req.Origin, req.Destination, req.Weight)
+	ctx := context.Background()
+
+	cached, err := s.redis.Get(ctx, cacheKey).Result()
+	if err == nil {
+		var result []dto.ShippingOption
+		json.Unmarshal([]byte(cached), &result)
+		return result, nil
+	}
+
+	courierString, err := s.getActiveCourierString()
+	if err != nil {
+		return nil, err
+	}
+
 	url := fmt.Sprintf("%s/calculate/district/domestic-cost", s.baseURL)
 
 	formData := neturl.Values{}
 	formData.Set("origin", req.Origin)
 	formData.Set("destination", req.Destination)
 	formData.Set("weight", fmt.Sprintf("%d", req.Weight))
-	formData.Set("courier", "jne:sicepat:ide:sap:jnt:ninja:tiki:lion:anteraja:pos:ncs:rex:rpx:sentral:star:wahana:dse")
+	formData.Set("courier", courierString)
 	formData.Set("price", "lowest")
 
 	httpReq, err := http.NewRequest("POST", url, strings.NewReader(formData.Encode()))
@@ -262,6 +296,9 @@ func (s *rajaOngkirService) CalculateShippingCost(req *dto.ShippingCostRequest) 
 	if len(result.Data) == 0 {
 		return nil, &errorhandler.NotFoundError{Message: "Tidak ada layanan pengiriman tersedia untuk rute ini"}
 	}
+
+	encoded, _ := json.Marshal(result.Data)
+	s.redis.Set(ctx, cacheKey, encoded, 2*time.Minute)
 
 	return result.Data, nil
 }

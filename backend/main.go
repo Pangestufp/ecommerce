@@ -41,6 +41,7 @@ func main() {
 	router.LogRouter(api)
 	router.OngkirRouter(api)
 	router.UserAddressRouter(api)
+	router.CourierRouter(api)
 
 	server.Initialize(config.DB)
 

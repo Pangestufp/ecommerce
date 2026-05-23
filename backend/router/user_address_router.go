@@ -14,7 +14,8 @@ import (
 func UserAddressRouter(api *gin.RouterGroup) {
 	UserAddressRepository := repository.NewAddressRepository(config.DB)
 	UserRepository := repository.NewUserRepository(config.DB)
-	OngkirService := service.NewRajaOngkirService(config.ENV.RajaOngkirAPIKey, config.ENV.RajaOngkirURL, config.RedisClient)
+	CourierRepository := repository.NewCourierRepository(config.DB)
+	OngkirService := service.NewRajaOngkirService(config.ENV.RajaOngkirAPIKey, config.ENV.RajaOngkirURL, config.RedisClient, CourierRepository)
 	UserAddressService := service.NewAddressService(UserAddressRepository, UserRepository, OngkirService)
 	UserAddressHandler := handler.NewAddressHandler(UserAddressService)
 
