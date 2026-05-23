@@ -25,3 +25,13 @@ export const getName = () => {
 export const getRole = () => {
   return getTokenPayload()?.role || ""
 }
+
+export const isTokenExpiringSoon = () => {
+  const payload = getTokenPayload()
+  if (!payload?.exp) return true
+
+  const now = Math.floor(Date.now() / 1000)
+  const sisaDetik = payload.exp - now
+
+  return sisaDetik < 2 * 60 // refresh kalau sisa < 2 menit
+}

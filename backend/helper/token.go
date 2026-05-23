@@ -25,7 +25,7 @@ func GenerateToken(user *entity.User) (string, error) {
 		user.Name,
 		user.Role,
 		jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(60 * time.Minute)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(15 * time.Minute)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
 	}
@@ -58,6 +58,44 @@ func ValidateToken(tokenString string) (*string, *string, error) {
 	if !ok || !token.Valid {
 		return nil, nil, errors.New("your token was expired")
 	}
+
+	return &claims.ID, &claims.Role, nil
+}
+
+func ExtractUserFromExpiredToken(tokenString string) (*string, *string, error) {
+	var mySigningKey = []byte(config.ENV.SecretKey)
+
+	token, err := jwt.NewParser(
+		jwt.WithoutClaimsValidation(),
+	).ParseWithClaims(
+		tokenString,
+		&JWTClaims{},
+		func(token *jwt.Token) (interface{}, error) {
+			// validasi signing method
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, errors.New("invalid signing method")
+			}
+
+			return mySigningKey, nil
+		},
+	)
+
+	if err != nil {
+		if err == jwt.ErrSignatureInvalid {
+			return nil, nil, errors.New("invalid token signature")
+		}
+
+		return nil, nil, errors.New("invalid token")
+	}
+
+	claims, ok := token.Claims.(*JWTClaims)
+	if !ok {
+		return nil, nil, errors.New("invalid token claims")
+	}
+
+	// IMPORTANT:
+	// token.Valid bisa false karena expired,
+	// tapi signature tetap sudah diverifikasi.
 
 	return &claims.ID, &claims.Role, nil
 }

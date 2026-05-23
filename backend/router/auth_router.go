@@ -18,8 +18,10 @@ func AuthRouter(api *gin.RouterGroup) {
 
 	rlLogin := middleware.NewRateLimiter(10, 15*time.Minute)
 	rlRegister := middleware.NewRateLimiter(5, time.Hour)
+	rlRefresh := middleware.NewRateLimiter(10, 15*time.Minute)
 
 	auth := api.Group("/auth")
 	auth.POST("/register", rlRegister.Middleware(), AuthHandler.RegisterCustomer)
 	auth.POST("/login", rlLogin.Middleware(), AuthHandler.Login)
+	auth.POST("/refresh", rlRefresh.Middleware(), AuthHandler.Refresh)
 }

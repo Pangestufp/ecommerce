@@ -2,6 +2,7 @@ class Endpoints {
   static AUTH = {
     LOGIN: "/api/auth/login",
     REGISTER: "/api/auth/register",
+    REFRESH: "/api/auth/refresh",
   };
 
   static TYPE = {

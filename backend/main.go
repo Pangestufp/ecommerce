@@ -45,11 +45,12 @@ func main() {
 	server.Initialize(config.DB)
 
 	srv := &http.Server{
-		Addr:         fmt.Sprintf(":%v", config.ENV.Port),
-		Handler:      r,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		Addr:              fmt.Sprintf(":%v", config.ENV.Port),
+		Handler:           r,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		ReadHeaderTimeout: 5 * time.Second,
 	}
 
 	if err := srv.ListenAndServe(); err != nil {

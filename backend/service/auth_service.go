@@ -6,8 +6,9 @@ import (
 	"backend/errorhandler"
 	"backend/helper"
 	"backend/repository"
-	"log"
+	"context"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
@@ -15,7 +16,8 @@ import (
 
 type AuthService interface {
 	Register(req *dto.RegisterRequest, userType string) error
-	Login(req *dto.LoginRequest) (*dto.LoginResponse, error)
+	Login(ctx context.Context, req *dto.LoginRequest) (*dto.LoginResponse, *string, error)
+	Refresh(ctx context.Context, userRefreshToken string, userID string) (*dto.LoginResponse, *string, error)
 }
 
 type authService struct {
@@ -73,31 +75,110 @@ func (s *authService) Register(req *dto.RegisterRequest, userType string) error 
 	return nil
 }
 
-func (s *authService) Login(req *dto.LoginRequest) (*dto.LoginResponse, error) {
+func (s *authService) Login(ctx context.Context, req *dto.LoginRequest) (*dto.LoginResponse, *string, error) {
 
 	user, err := s.repositoryA.GetUserByEmail(helper.LowerAndTrim(req.Email))
 
 	if err != nil {
-		return nil, &errorhandler.NotFoundError{Message: "wrong email or password"}
+		return nil, nil, &errorhandler.NotFoundError{Message: "wrong email or password"}
 	}
 
 	if err := helper.VerifyPassword(user.Password, req.Password); err != nil {
-		return nil, &errorhandler.NotFoundError{Message: "wrong email or password"}
+		return nil, nil, &errorhandler.NotFoundError{Message: "wrong email or password"}
 	}
 
 	token, err := helper.GenerateToken(user)
 
 	if err != nil {
-		return nil, &errorhandler.InternalServerError{Message: err.Error()}
+		return nil, nil, &errorhandler.InternalServerError{Message: err.Error()}
+	}
+
+	refreshToken, err := helper.GenerateRefreshToken()
+	if err != nil {
+		return nil, nil, &errorhandler.InternalServerError{Message: err.Error()}
+	}
+
+	now := time.Now()
+	expiredAt := now.Add(7 * 24 * time.Hour)
+
+	refreshTokenHash, err := helper.HashRefreshToken(refreshToken)
+
+	if err != nil {
+		return nil, nil, &errorhandler.InternalServerError{Message: err.Error()}
+	}
+
+	newRefreshToken := entity.RefreshToken{
+		ID:               uuid.New().String(),
+		UserID:           user.UserID,
+		RefreshTokenHash: refreshTokenHash,
+		ExpiredAt:        expiredAt,
+		CreatedAt:        helper.TimeNowWIB(),
+		UpdatedAt:        helper.TimeNowWIB(),
+	}
+
+	if err := s.repositoryA.StoreRefreshToken(ctx, &newRefreshToken); err != nil {
+		return nil, nil, &errorhandler.InternalServerError{Message: err.Error()}
 	}
 
 	res := dto.LoginResponse{
-		ID:    user.UserID,
-		Name:  user.Name,
 		Token: token,
 	}
 
-	log.Printf("User dengan id : %s telah login ", user.UserID)
+	return &res, &refreshToken, nil
+}
 
-	return &res, err
+func (s *authService) Refresh(ctx context.Context, userRefreshToken string, userID string) (*dto.LoginResponse, *string, error) {
+	user, err := s.repositoryA.GetUserByID(userID) //cek user
+	if err != nil {
+		return nil, nil, &errorhandler.UnauthorizedError{Message: "You should login"}
+	}
+
+	now := time.Now()
+
+	oldRefreshToken, err := s.repositoryA.GetRefreshToken(ctx, userID, now) //ambil token lama yg udh dihash
+	if err != nil {
+		return nil, nil, &errorhandler.UnauthorizedError{Message: "You should login"}
+	}
+
+	if err := helper.VerifyRefreshToken(oldRefreshToken.RefreshTokenHash, userRefreshToken); err != nil { //cek token lama sama gak ama yg dihit
+		return nil, nil, &errorhandler.UnauthorizedError{Message: "Your Token is Invalid"}
+	}
+
+	token, err := helper.GenerateToken(user) //buat jwt baru
+
+	if err != nil {
+		return nil, nil, &errorhandler.InternalServerError{Message: err.Error()}
+	}
+
+	refreshToken, err := helper.GenerateRefreshToken() //buat refreshtoken baru
+	if err != nil {
+		return nil, nil, &errorhandler.InternalServerError{Message: err.Error()}
+	}
+
+	expiredAt := now.Add(7 * 24 * time.Hour)
+
+	hashRefreshToken, err := helper.HashRefreshToken(refreshToken) //hash refrresh tokennya
+
+	if err != nil {
+		return nil, nil, &errorhandler.InternalServerError{Message: err.Error()}
+	}
+
+	newRefreshToken := entity.RefreshToken{
+		ID:               uuid.New().String(),
+		UserID:           user.UserID,
+		RefreshTokenHash: hashRefreshToken,
+		ExpiredAt:        expiredAt,
+		CreatedAt:        oldRefreshToken.CreatedAt,
+		UpdatedAt:        helper.TimeNowWIB(),
+	}
+
+	if err := s.repositoryA.StoreRefreshToken(ctx, &newRefreshToken); err != nil { //buat token baru
+		return nil, nil, &errorhandler.InternalServerError{Message: err.Error()}
+	}
+
+	res := dto.LoginResponse{ //kasih respons
+		Token: token,
+	}
+
+	return &res, &refreshToken, nil
 }
