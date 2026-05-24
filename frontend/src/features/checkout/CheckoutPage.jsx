@@ -1,75 +1,159 @@
+import { useState, useMemo } from "react";
 import { useCheckout } from "./useCheckout";
-
-function formatRupiah(n) {
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency", currency: "IDR", maximumFractionDigits: 0,
-  }).format(parseFloat(n));
-}
+import Button from "../../shared/ui/Button"
+import { getBestDiscount, getUnitPrice, formatRupiah } from "./checkoutHelpers";
+import { AddressSection } from "./components/AddressSection";
+import ProductItem from "./components/Productitem ";
+import OrderSummary from "./components/Ordersummary";
 
 export default function CheckoutPage() {
   const { checkoutData } = useCheckout();
 
+  // ── State produk: qty + diskon terpilih ───────────────────────────────────
+  const [productStates, setProductStates] = useState(() => {
+    if (!checkoutData) return {};
+    const init = {};
+    checkoutData.product_price?.forEach((item) => {
+      const best = getBestDiscount(item.discount);
+      init[item.product_id] = {
+        qty: item.qty,
+        selectedDiscountId: best ? best.discount_id : null,
+      };
+    });
+    return init;
+  });
+
+  // ── State alamat: primary atau index pertama ──────────────────────────────
+  const [selectedAddressId, setSelectedAddressId] = useState(() => {
+    if (!checkoutData) return null;
+    const primary = checkoutData.user_address?.find((a) => a.is_primary === 1);
+    return primary?.address_id ?? checkoutData.user_address?.[0]?.address_id ?? null;
+  });
+
   if (!checkoutData) return null;
-  console.log(checkoutData)
+
+  const products = checkoutData.product_price ?? [];
+  const addresses = checkoutData.user_address ?? [];
+
+  // ── Grand total ───────────────────────────────────────────────────────────
+  const grandTotal = useMemo(() => {
+    return products.reduce((sum, item) => {
+      const state = productStates[item.product_id];
+      if (!state) return sum;
+      const disc = item.discount?.find((d) => d.discount_id === state.selectedDiscountId) ?? null;
+      return sum + getUnitPrice(item, disc) * state.qty;
+    }, 0);
+  }, [productStates, products]);
+
+  // ── Handlers ─────────────────────────────────────────────────────────────
+  const handleQty = (productId, delta, maxStock) => {
+    setProductStates((prev) => {
+      const next = prev[productId].qty + delta;
+      return {
+        ...prev,
+        [productId]: {
+          ...prev[productId],
+          qty: Math.min(Math.max(1, next), maxStock),
+        },
+      };
+    });
+  };
+
+  const handleDiscount = (productId, discountId) => {
+    setProductStates((prev) => ({
+      ...prev,
+      [productId]: { ...prev[productId], selectedDiscountId: discountId },
+    }));
+  };
+
+  const handleOrder = () => {
+    const payload = {
+      address_id: selectedAddressId,
+      items: products.map((item) => {
+        const state = productStates[item.product_id];
+        const disc = item.discount?.find((d) => d.discount_id === state?.selectedDiscountId) ?? null;
+        return {
+          product_id: item.product_id,
+          qty: state?.qty ?? item.qty,
+          discount_id: state?.selectedDiscountId ?? null,
+          unit_price: getUnitPrice(item, disc),
+        };
+      }),
+      total: grandTotal,
+    };
+    console.log("Order payload:", payload);
+    // TODO: call API order
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-xl mx-auto px-4 py-6">
+      <div className="max-w-xl mx-auto px-4 py-6 pb-32">
 
-        <h1 className="text-lg font-semibold text-gray-900 mb-6">
+        <h1 className="text-lg font-semibold text-gray-900 mb-5">
           Konfirmasi Pesanan
         </h1>
 
-        {/* Note kalau ada perubahan dari backend */}
+        {/* Notifikasi dari backend */}
         {checkoutData.is_note === 1 && (
           <div className="bg-orange-50 border border-orange-100 rounded-xl px-4 py-3 mb-4">
             <p className="text-xs text-orange-700">{checkoutData.note}</p>
           </div>
         )}
 
+        {/* Alamat pengiriman */}
+        <AddressSection
+          addresses={addresses}
+          selectedId={selectedAddressId}
+          onSelect={setSelectedAddressId}
+        />
+
         {/* List produk */}
         <div className="bg-white rounded-2xl border border-gray-100 px-4 mb-3">
-          {checkoutData.list_product?.map(item => (
-            <div
-              key={item.product_id}
-              className="flex items-center gap-3 py-4 border-b border-gray-100 last:border-0"
-            >
-              <div className="shrink-0 w-14 h-14 rounded-xl overflow-hidden bg-gray-50">
-                {item.image ? (
-                  <img
-                    src={item.image}
-                    alt={item.product_name}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-gray-300 text-xs">
-                    No Img
-                  </div>
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">
-                  {item.product_name}
-                </p>
-                <p className="text-xs text-gray-400 mt-0.5">x{item.qty}</p>
-              </div>
-              <p className="text-sm font-medium text-gray-900 shrink-0">
-                {item.Price_format}
-              </p>
-            </div>
-          ))}
+          {products.map((item, idx) => {
+            const state = productStates[item.product_id] ?? {
+              qty: item.qty,
+              selectedDiscountId: null,
+            };
+            return (
+              <ProductItem
+                key={item.product_id}
+                item={item}
+                qty={state.qty}
+                selectedDiscountId={state.selectedDiscountId}
+                onQtyChange={(delta) => handleQty(item.product_id, delta, item.available_stock)}
+                onDiscountChange={(id) => handleDiscount(item.product_id, id)}
+                isLast={idx === products.length - 1}
+              />
+            );
+          })}
         </div>
 
-        {/* Total */}
-        <div className="bg-white rounded-2xl border border-gray-100 px-4 py-4">
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-gray-500">Total</span>
-            <span className="text-base font-semibold text-gray-900">
-              {formatRupiah(checkoutData.total_now)}
-            </span>
+        {/* Ringkasan harga */}
+        <OrderSummary
+          products={products}
+          productStates={productStates}
+          grandTotal={grandTotal}
+        />
+
+      </div>
+
+      {/* Sticky footer */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 px-4 py-3">
+        <div className="max-w-xl mx-auto flex items-center justify-between gap-4">
+          <div>
+            <p className="text-xs text-gray-400">Total Pembayaran</p>
+            <p className="text-base font-bold text-gray-900">{formatRupiah(grandTotal)}</p>
           </div>
+          <Button
+            onClick={handleOrder}
+            disabled={!selectedAddressId}
+            className="shrink-0 px-6 py-2.5 text-sm"
+          >
+            Buat Pesanan
+          </Button>
         </div>
-
       </div>
     </div>
   );
