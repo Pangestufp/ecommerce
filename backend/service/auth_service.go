@@ -154,9 +154,6 @@ func (s *authService) Refresh(ctx context.Context, userRefreshToken string, user
 	if err != nil {
 		return nil, nil, &errorhandler.InternalServerError{Message: err.Error()}
 	}
-
-	expiredAt := now.Add(7 * 24 * time.Hour)
-
 	hashRefreshToken, err := helper.HashRefreshToken(refreshToken) //hash refrresh tokennya
 
 	if err != nil {
@@ -167,12 +164,12 @@ func (s *authService) Refresh(ctx context.Context, userRefreshToken string, user
 		ID:               uuid.New().String(),
 		UserID:           user.UserID,
 		RefreshTokenHash: hashRefreshToken,
-		ExpiredAt:        expiredAt,
+		ExpiredAt:        oldRefreshToken.ExpiredAt,
 		CreatedAt:        oldRefreshToken.CreatedAt,
 		UpdatedAt:        helper.TimeNowWIB(),
 	}
 
-	if err := s.repositoryA.StoreRefreshToken(ctx, &newRefreshToken); err != nil { //buat token baru
+	if err := s.repositoryA.UpdateRefreshToken(ctx, &newRefreshToken); err != nil { //buat token baru
 		return nil, nil, &errorhandler.InternalServerError{Message: err.Error()}
 	}
 

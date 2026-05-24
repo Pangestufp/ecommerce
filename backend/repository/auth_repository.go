@@ -14,6 +14,7 @@ type AuthRepository interface {
 	GetUserByEmail(email string) (*entity.User, error)
 	GetRefreshToken(ctx context.Context, userID string, now time.Time) (*entity.RefreshToken, error)
 	StoreRefreshToken(ctx context.Context, token *entity.RefreshToken) error
+	UpdateRefreshToken(ctx context.Context, token *entity.RefreshToken) error
 	GetUserByID(userID string) (*entity.User, error)
 }
 
@@ -86,4 +87,15 @@ func (r *authRepository) GetUserByID(userID string) (*entity.User, error) {
 	err := r.db.First(&user, "user_id = ?", userID).Error
 
 	return &user, err
+}
+
+func (r *authRepository) UpdateRefreshToken(ctx context.Context, token *entity.RefreshToken) error {
+	return r.db.WithContext(ctx).
+		Model(&entity.RefreshToken{}).
+		Where("user_id = ?", token.UserID).
+		Updates(map[string]interface{}{
+			"refresh_token_hash": token.RefreshTokenHash,
+			"expired_at":         token.ExpiredAt,
+			"updated_at":         token.UpdatedAt,
+		}).Error
 }

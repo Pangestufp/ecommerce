@@ -10,6 +10,7 @@ export default function CheckoutPage() {
   const { checkoutData } = useCheckout();
 
   if (!checkoutData) return null;
+  console.log(checkoutData)
 
   return (
     <div className="min-h-screen bg-gray-50">
