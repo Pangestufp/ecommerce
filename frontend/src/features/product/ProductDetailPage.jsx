@@ -13,6 +13,7 @@ import Pagination from "./components/Pagination ";
 import SearchBar from "../../shared/ui/SearchBar";
 import Button from "../../shared/ui/Button";
 import Table from "../../shared/table/Table";
+import TableBatch from "./components/TableBatch";
 
 export default function ProductDetailPage() {
   const { id } = useParams();
@@ -60,23 +61,7 @@ export default function ProductDetailPage() {
   const [selectedInventory, setSelectedInventory] = useState(null);
   
 
-  // inventoryColumns di sini karena butuh setSelectedInventory
-  const inventoryColumns = [
-    { key: "batch_code", label: "Kode Batch", align: "left" },
-    { key: "cost_price_format", label: "Harga Modal", align: "left" },
-    { key: "stock", label: "Stok", align: "left" },
-    { key: "reserved_stock", label: "Direservasi", align: "left" },
-    {
-      key: "actions",
-      label: "",
-      align: "right",
-      render: (_, row) => (
-        <Button variant="secondary" onClick={() => setSelectedInventory(row)}>
-          Edit
-        </Button>
-      ),
-    },
-  ];
+  
 
   const priceColumns = [
     {
@@ -299,10 +284,9 @@ export default function ProductDetailPage() {
           </>
         }
       >
-        <Table
-          columns={inventoryColumns}
-          data={inventories}
-          rowKey="batch_id"
+        <TableBatch
+          onEdit={(row) => setSelectedInventory(row)}
+          data={inventories}   
         />
         <Pagination
           page={pageInventory}

@@ -60,6 +60,11 @@ class Endpoints {
     CHECKOUT: `/api/verify-checkout`,
   }
 
+  static TRANSACTION = {
+    GET_BY_BATCH_ID: (batchID, id, direction, createdAt) => 
+        `/api/transaction/batch/${batchID}?id=${id}&direction=${direction}&created_at=${createdAt}`,
+};
+
 }
 
 export default Endpoints;

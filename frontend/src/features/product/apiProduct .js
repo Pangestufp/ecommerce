@@ -72,6 +72,10 @@ const ApiProduct = {
         const res = await api.get(Endpoints.PRODUCT.LOG(productID, id, direction, createdAt))
         return res
     },
+    getTransactionsByBatchPaginate: async (batchID, id, direction, createdAt) => {
+    const res = await api.get(Endpoints.TRANSACTION.GET_BY_BATCH_ID(batchID, id, direction, createdAt));
+    return res;
+},
 }
  
 export default ApiProduct
