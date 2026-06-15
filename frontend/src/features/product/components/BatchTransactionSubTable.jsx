@@ -3,16 +3,44 @@ import Table from "../../../shared/table/Table";
 import Pagination from "./Pagination ";
 import useBatchTransaction from "../UseBatchTransaction";
 
+
+const formatDateTime = (dateString) => {
+  if (!dateString) return "-";
+  const date = new Date(dateString);
+  return date.toLocaleString("id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
 const transactionColumns = [
   { 
-    key: "type", 
+    key: "created_at", 
+    label: "Tanggal", 
+    align: "left", 
+    render: (val) => <span className="text-gray-500 whitespace-nowrap">{formatDateTime(val)}</span>
+  },
+  { 
+  key: "type", 
     label: "Tipe", 
     align: "left", 
-    render: (val) => (
-      <span className={`font-bold px-2 py-1 rounded text-xs ${val === "IN" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
-        {val}
-      </span>
-    )
+    render: (val) => {
+   
+      const isIncoming = val?.toLowerCase() === "in";
+
+      return (
+        <span className={`font-bold px-2 py-0.5 rounded text-xs ${
+          isIncoming 
+            ? "bg-green-100 text-green-700"  
+            : "bg-red-100 text-red-700"      
+        }`}>
+          {val}
+        </span>
+      );
+    }
   },
   { key: "quantity", label: "Jumlah", align: "left" },
   { key: "reference_type", label: "Jenis Ref", align: "left" },
@@ -33,7 +61,7 @@ export default function BatchTransactionSubTable({ batchID }) {
   return (
     <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 my-2 shadow-inner">
       <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
-        📜 Riwayat Keluar Masuk Stok Batch
+        Riwayat Keluar Masuk Stok Batch
       </div>
       
       <Table 

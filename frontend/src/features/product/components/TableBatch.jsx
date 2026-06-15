@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import Button from "../../../shared/ui/Button";
+import { ChevronRight } from "lucide-react";
 import BatchTransactionSubTable from "./BatchTransactionSubTable";
 
 export default function TableBatch({ data, onEdit }) {
@@ -10,6 +11,16 @@ export default function TableBatch({ data, onEdit }) {
       ...prev,
       [batchID]: !prev[batchID], 
     }));
+  };
+
+
+  const handleEditClick = (row) => {
+    setExpandedRows((prev) => ({
+      ...prev,
+      [row.batch_id]: false,
+    }));
+
+    if (onEdit) onEdit(row);
   };
 
   return (
@@ -33,22 +44,24 @@ export default function TableBatch({ data, onEdit }) {
                 const isExpanded = !!expandedRows[row.batch_id];
                 return (
                   <React.Fragment key={row.batch_id}>
-                    <tr className={`hover:bg-gray-50 transition-colors ${isExpanded ? "bg-blue-50/30" : ""}`}>
-                      <td className="px-4 py-3 text-center">
-                        <button 
-                          onClick={() => toggleRow(row.batch_id)} 
-                          className="text-gray-400 hover:text-blue-600 font-bold transition-transform duration-200 block w-full text-left"
-                          style={{ transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)" }}
-                        >
-                          ▶
-                        </button>
-                      </td>
+                    <tr className={`hover:bg-gray-50 transition-colors ${isExpanded ? "bg-gray-100/50" : ""}`}>
+                     <td className="px-4 py-3 text-center">
+                      <button 
+                        type="button"
+                        onClick={() => toggleRow(row.batch_id)} 
+                        className="text-gray-400 hover:text-gray-700 transition-transform duration-200 transform flex items-center justify-center w-full focus:outline-none"
+                        style={{ transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)" }}
+                      >
+                       
+                        <ChevronRight size={18} strokeWidth={2.5} />
+                      </button>
+                    </td>
                       <td className="px-4 py-3 font-medium text-gray-900">{row.batch_code}</td>
                       <td className="px-4 py-3 text-gray-700">{row.cost_price_format}</td>
                       <td className="px-4 py-3 text-gray-700 font-semibold">{row.stock}</td>
                       <td className="px-4 py-3 text-gray-500">{row.reserved_stock}</td>
                       <td className="px-4 py-3 text-right">
-                        <Button variant="secondary" onClick={() => onEdit(row)}>
+                        <Button variant="secondary" onClick={() => handleEditClick(row)}>
                           Edit
                         </Button>
                       </td>

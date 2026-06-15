@@ -143,6 +143,9 @@ export default function ProductDetailPage() {
     try {
       await updateInventory(batchId, payload);
       setSelectedInventory(null);
+      if (typeof fetchFirstInventoryPage === "function") {
+        fetchFirstInventoryPage("");
+      }
     } catch {}
   };
 
