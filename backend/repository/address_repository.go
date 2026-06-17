@@ -16,6 +16,7 @@ type AddressRepository interface {
 	GetAddressByUserID(userID string) ([]entity.UserAddress, error)
 	CountAddressByUserID(userID string) (int64, error)
 	UnsetPrimaryByUserID(userID string) error
+	GetAddressByIDAndUserID(addressID string, userID string) (*entity.UserAddress, error)
 }
 
 type addressRepository struct {
@@ -83,4 +84,16 @@ func (r *addressRepository) UnsetPrimaryByUserID(userID string) error {
 	return r.db.Model(&entity.UserAddress{}).
 		Where("user_id = ?", userID).
 		Update("is_primary", 0).Error
+}
+
+func (r *addressRepository) GetAddressByIDAndUserID(addressID string, userID string) (*entity.UserAddress, error) {
+	var address entity.UserAddress
+	err := r.db.Where("address_id = ? AND user_id = ?", addressID, userID).First(&address).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &address, nil
 }
