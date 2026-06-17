@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"log"
 	"net/http"
 	"sync"
 	"time"
@@ -68,13 +67,6 @@ func (rl *RateLimiter) Middleware() gin.HandlerFunc {
 			c.Next()
 			return
 		}
-
-		log.Printf("RATE_LIMIT_CHECK path=%s ip=%s userID=%v key=%s",
-			c.FullPath(),
-			c.ClientIP(),
-			userID,
-			key,
-		)
 
 		if v.count >= rl.limit {
 			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{

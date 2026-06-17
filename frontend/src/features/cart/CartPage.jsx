@@ -1,6 +1,5 @@
 import { useNavigate } from "react-router-dom";
 import { useCart } from "./useCart";
-import { useCheckoutContext } from "../checkout/CheckoutContext";
 import CartLineItem from "./components/CartLineItem";
 import { ShoppingCart } from "lucide-react";
 import ApiCart from "./apiCart";
@@ -8,11 +7,15 @@ import { useModal } from "../../shared/modal/ModalContext";
 
 function formatRupiah(n) {
   return new Intl.NumberFormat("id-ID", {
-    style: "currency", currency: "IDR", maximumFractionDigits: 0,
+    style: "currency",
+    currency: "IDR",
+    maximumFractionDigits: 0,
   }).format(n);
 }
 
 export default function CartPage() {
+  const navigate = useNavigate();
+
   const {
     verifiedItems,
     checkedIDs,
@@ -20,37 +23,16 @@ export default function CartPage() {
     checkedTotal,
     note,
     loading,
+    checkout,
+    emptyCart,
     toggleCheck,
     updateQty,
     removeItem,
-    emptyCart,
   } = useCart();
-
-  const { setCheckout } = useCheckoutContext();
-  const navigate = useNavigate();
-  const { error: modalError, loading: modalLoading } = useModal();
-
-  const handleCheckout = async () => {
-    if (checkedItems.length === 0) return;
-
-    const closeLoading = modalLoading("Memproses checkout...");
-    try {
-      const res = await ApiCart.checkout(
-        checkedItems.map(p => ({ id: p.product_id, qty: p.qty }))
-      );
-      closeLoading();
-      setCheckout(res.data.data);
-      navigate("/checkout");
-    } catch (err) {
-      closeLoading();
-      await modalError(err);
-    }
-  };
 
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-xl mx-auto px-4 py-6">
-
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-lg font-semibold text-gray-900">
@@ -94,7 +76,7 @@ export default function CartPage() {
           <>
             {/* List item */}
             <div className="bg-white rounded-2xl border border-gray-100 px-4">
-              {verifiedItems.map(item => (
+              {verifiedItems.map((item) => (
                 <CartLineItem
                   key={item.product_id}
                   item={item}
@@ -117,18 +99,17 @@ export default function CartPage() {
                 </span>
               </div>
               <button
-                onClick={handleCheckout}
+                onClick={checkout}
                 disabled={checkedItems.length === 0}
                 className="w-full py-3 rounded-xl bg-gray-900 text-white text-sm font-medium hover:bg-gray-700 transition-colors disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed"
               >
                 {checkedItems.length === 0
-                  ? "Pilih produk untuk checkout"
-                  : `Checkout (${checkedItems.length} produk)`}
+                  ? "Pilih item untuk checkout"
+                  : `Checkout (${checkedItems.length} item)`}
               </button>
             </div>
           </>
         )}
-
       </div>
     </div>
   );

@@ -1,16 +1,14 @@
-import { Minus, Plus } from "lucide-react";
 import { formatRupiah, getUnitPrice } from "../checkoutHelpers";
 import DiscountPicker from "./DiscountPicker";
 
 /**
  * ProductItem
- * Satu baris produk di checkout: gambar, nama, harga, qty stepper, discount picker.
+ * Satu baris produk di checkout: gambar, nama, harga, qty (read-only), discount picker.
  *
  * Props:
  *  - item              : object produk dari API (product_price[n])
- *  - qty               : qty saat ini
+ *  - qty               : qty dari cart (read-only)
  *  - selectedDiscountId: discount_id aktif (null = tanpa diskon)
- *  - onQtyChange(delta): callback +1 / -1
  *  - onDiscountChange(id): callback ganti diskon
  *  - isLast            : boolean, hilangkan border-bottom jika true
  */
@@ -18,7 +16,6 @@ export default function ProductItem({
   item,
   qty,
   selectedDiscountId,
-  onQtyChange,
   onDiscountChange,
   isLast,
 }) {
@@ -28,9 +25,7 @@ export default function ProductItem({
 
   return (
     <div className={`py-4 ${!isLast ? "border-b border-gray-100" : ""}`}>
-      {/* Baris atas: gambar + info + total */}
       <div className="flex items-start gap-3">
-        {/* Thumbnail */}
         <div className="shrink-0 w-14 h-14 rounded-xl overflow-hidden bg-gray-50">
           {item.image ? (
             <img
@@ -45,7 +40,6 @@ export default function ProductItem({
           )}
         </div>
 
-        {/* Nama + harga satuan */}
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-gray-900 truncate pr-1">
             {item.product_name}
@@ -63,51 +57,23 @@ export default function ProductItem({
           ) : (
             <p className="text-xs text-gray-500 mt-0.5">{item.product_price_format}</p>
           )}
+
+          <p className="text-[11px] text-gray-400 mt-1">x{qty}</p>
         </div>
 
-        {/* Total baris */}
         <div className="shrink-0 text-right">
           <p className="text-sm font-semibold text-gray-900">{formatRupiah(lineTotal)}</p>
         </div>
       </div>
 
-      {/* Baris bawah: discount picker (kiri) + qty stepper (kanan) */}
-      <div className="flex items-center justify-between mt-3 gap-2">
+      <div className="mt-3">
         <DiscountPicker
           discounts={item.discount}
           selectedId={selectedDiscountId}
           onSelect={onDiscountChange}
           productPrice={item.product_price}
         />
-
-        {/* Qty stepper */}
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={() => onQtyChange(-1)}
-            disabled={qty <= 1}
-            className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 disabled:opacity-30 transition"
-          >
-            <Minus size={13} />
-          </button>
-          <span className="text-sm font-medium text-gray-800 w-5 text-center tabular-nums">
-            {qty}
-          </span>
-          <button
-            type="button"
-            onClick={() => onQtyChange(+1)}
-            disabled={qty >= item.available_stock}
-            className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 disabled:opacity-30 transition"
-          >
-            <Plus size={13} />
-          </button>
-        </div>
       </div>
-
-      {/* Info stok */}
-      <p className="text-[10px] text-gray-400 mt-1.5">
-        Stok tersisa: {item.available_stock}
-      </p>
     </div>
   );
 }

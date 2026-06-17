@@ -7,17 +7,21 @@ import (
 	"backend/helper"
 	"backend/repository"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7"
 	"github.com/redis/go-redis/v9"
 	"github.com/shopspring/decimal"
 )
 
 type CheckoutService interface {
-	VerifyCheckout(req *dto.CartRequest, userID string) (*dto.VerifyCheckoutResponse, error)
+	CreateCheckout(req *dto.CartRequest, userID string) (*dto.CreateCheckoutResponse, error)
+	GetCheckout(checkoutID string, userID string) (*dto.VerifyCheckoutResponse, error)
+	CalculateShippingFromAddress(req *dto.ShippingRequest, userID string) (*dto.ShippingResponse, error)
 }
 
 type checkoutService struct {
@@ -25,24 +29,28 @@ type checkoutService struct {
 	discountRepository repository.DiscountRepository
 	priceRepository    repository.ProductPriceRepository
 	addressRepository  repository.AddressRepository
+	storeConfigService StoreConfigService
+	rajaOngkirService  RajaOngkirService
 	minio              *minio.Client
 	redis              *redis.Client
 	bucket             string
 }
 
-func NewCheckoutService(productRepository repository.ProductRepository, discountRepository repository.DiscountRepository, priceRepository repository.ProductPriceRepository, addressRepository repository.AddressRepository, minio *minio.Client, redis *redis.Client, bucket string) *checkoutService {
+func NewCheckoutService(productRepository repository.ProductRepository, discountRepository repository.DiscountRepository, priceRepository repository.ProductPriceRepository, addressRepository repository.AddressRepository, storeConfigService StoreConfigService, rajaOngkirService RajaOngkirService, minio *minio.Client, redis *redis.Client, bucket string) *checkoutService {
 	return &checkoutService{
 		productRepository:  productRepository,
 		discountRepository: discountRepository,
 		priceRepository:    priceRepository,
 		addressRepository:  addressRepository,
+		storeConfigService: storeConfigService,
+		rajaOngkirService:  rajaOngkirService,
 		minio:              minio,
 		redis:              redis,
 		bucket:             bucket,
 	}
 }
 
-func (s *checkoutService) VerifyCheckout(req *dto.CartRequest, userID string) (*dto.VerifyCheckoutResponse, error) {
+func (s *checkoutService) CreateCheckout(req *dto.CartRequest, userID string) (*dto.CreateCheckoutResponse, error) {
 	if len(req.ListCart) == 0 {
 		return nil, &errorhandler.BadRequestError{Message: "Keranjang tidak valid"}
 	}
@@ -58,6 +66,90 @@ func (s *checkoutService) VerifyCheckout(req *dto.CartRequest, userID string) (*
 	enriched, err := s.productRepository.GetProductsEnrichedBatch(productIDs)
 	if err != nil {
 		return nil, &errorhandler.InternalServerError{Message: "Error validasi item"}
+	}
+
+	productMap := make(map[string]*dto.ProductEnrichedForES)
+	for _, p := range enriched {
+		productMap[p.ProductID] = p
+	}
+
+	var redisItems []dto.CheckoutRedisItem
+	for _, item := range req.ListCart {
+		product, exists := productMap[item.ProductID]
+		if !exists || product.Available == 0 {
+			continue
+		}
+
+		finalQty := item.Qty
+		if int64(finalQty) > product.AvailableStock {
+			finalQty = int(product.AvailableStock)
+		}
+		if finalQty == 0 {
+			continue
+		}
+
+		redisItems = append(redisItems, dto.CheckoutRedisItem{
+			ProductID: product.ProductID,
+			Qty:       finalQty,
+		})
+	}
+
+	if len(redisItems) == 0 {
+		return nil, &errorhandler.BadRequestError{Message: "Tidak ada item valid untuk checkout"}
+	}
+
+	checkoutID := uuid.New().String()
+	redisData := dto.CheckoutRedisData{
+		CheckoutID: checkoutID,
+		UserID:     userID,
+		Items:      redisItems,
+		CreatedAt:  helper.TimeNowWIB(),
+	}
+
+	ctx := context.Background()
+	encoded, _ := json.Marshal(redisData)
+	cacheKey := fmt.Sprintf("checkout:%s", checkoutID)
+
+	if err := s.redis.Set(ctx, cacheKey, encoded, 30*time.Minute).Err(); err != nil {
+		return nil, &errorhandler.InternalServerError{Message: "Gagal menyimpan sesi checkout"}
+	}
+
+	return &dto.CreateCheckoutResponse{CheckoutID: checkoutID}, nil
+}
+
+func (s *checkoutService) GetCheckout(checkoutID string, userID string) (*dto.VerifyCheckoutResponse, error) {
+	ctx := context.Background()
+	cacheKey := fmt.Sprintf("checkout:%s", checkoutID)
+
+	cached, err := s.redis.Get(ctx, cacheKey).Result()
+	if err == redis.Nil {
+		return nil, &errorhandler.NotFoundError{Message: "Sesi checkout tidak ditemukan atau sudah kedaluwarsa"}
+	}
+	if err != nil {
+		return nil, &errorhandler.InternalServerError{Message: "Gagal mengambil sesi checkout"}
+	}
+
+	var redisData dto.CheckoutRedisData
+	if err := json.Unmarshal([]byte(cached), &redisData); err != nil {
+		return nil, &errorhandler.InternalServerError{Message: "Data checkout tidak valid"}
+	}
+
+	// Validasi kepemilikan
+	if redisData.UserID != userID {
+		return nil, &errorhandler.BadRequestError{Message: "Akses tidak diizinkan"}
+	}
+
+	// Enrich data produk (sama seperti VerifyCheckout lama)
+	productIDs := make([]string, 0, len(redisData.Items))
+	qtyMap := make(map[string]int)
+	for _, item := range redisData.Items {
+		productIDs = append(productIDs, item.ProductID)
+		qtyMap[item.ProductID] = item.Qty
+	}
+
+	enriched, err := s.productRepository.GetProductsEnrichedBatch(productIDs)
+	if err != nil {
+		return nil, &errorhandler.InternalServerError{Message: "Error mengambil data produk"}
 	}
 
 	now := helper.TimeNowWIB()
@@ -89,20 +181,10 @@ func (s *checkoutService) VerifyCheckout(req *dto.CartRequest, userID string) (*
 		}
 	}
 
-	ctx := context.Background()
 	var listProduct []dto.ProductCheckoutData
-
-	for _, item := range req.ListCart {
+	for _, item := range redisData.Items {
 		product, exists := productMap[item.ProductID]
 		if !exists || product.Available == 0 {
-			continue
-		}
-
-		finalQty := item.Qty
-		if int64(finalQty) > product.AvailableStock {
-			finalQty = int(product.AvailableStock)
-		}
-		if finalQty == 0 {
 			continue
 		}
 
@@ -114,9 +196,9 @@ func (s *checkoutService) VerifyCheckout(req *dto.CartRequest, userID string) (*
 		cacheKey := fmt.Sprintf("image:%s", product.PrimaryImageID)
 		presignedURL := ""
 
-		cached, err := s.redis.Get(ctx, cacheKey).Result()
+		imageCached, err := s.redis.Get(ctx, cacheKey).Result()
 		if err == nil {
-			presignedURL = cached
+			presignedURL = imageCached
 		} else {
 			url, err := s.minio.PresignedGetObject(ctx, s.bucket, product.PrimaryImage, time.Minute*5, nil)
 			if err != nil {
@@ -134,7 +216,7 @@ func (s *checkoutService) VerifyCheckout(req *dto.CartRequest, userID string) (*
 			ProductName:        product.ProductName,
 			Image:              presignedURL,
 			AvailableStock:     int(product.AvailableStock),
-			Qty:                finalQty,
+			Qty:                qtyMap[product.ProductID],
 			ProductPrice:       product.ProductPrice,
 			ProductPriceFormat: helper.FormatRupiah(product.ProductPrice),
 			Discounts:          discountResponses,
@@ -174,6 +256,67 @@ func (s *checkoutService) VerifyCheckout(req *dto.CartRequest, userID string) (*
 		ProductPrice: listProduct,
 		User_Address: addressResponses,
 	}, nil
+}
+
+func (s *checkoutService) CalculateShippingFromAddress(req *dto.ShippingRequest, userID string) (*dto.ShippingResponse, error) {
+	log.Println("fee bagian 1")
+
+	ctx := context.Background()
+
+	cacheKey := fmt.Sprintf("checkout:%s", req.CheckoutID)
+	cached, err := s.redis.Get(ctx, cacheKey).Result()
+	if err == redis.Nil {
+		return nil, &errorhandler.NotFoundError{Message: "Sesi checkout tidak ditemukan atau sudah kedaluwarsa"}
+	}
+	if err != nil {
+		return nil, &errorhandler.InternalServerError{Message: "Gagal mengambil sesi checkout"}
+	}
+
+	var redisData dto.CheckoutRedisData
+	if err := json.Unmarshal([]byte(cached), &redisData); err != nil {
+		return nil, &errorhandler.InternalServerError{Message: "Data checkout tidak valid"}
+	}
+	if redisData.UserID != userID {
+		return nil, &errorhandler.BadRequestError{Message: "Akses tidak diizinkan"}
+	}
+
+	// Ambil address user
+	address, err := s.addressRepository.GetAddressByIDAndUserID(req.AddressID, userID)
+	if err != nil {
+		return nil, &errorhandler.InternalServerError{Message: "Gagal mengambil alamat"}
+	}
+	if address == nil {
+		return nil, &errorhandler.NotFoundError{Message: "Alamat tidak ditemukan"}
+	}
+
+	storeConfig, err := s.storeConfigService.GetConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	productIDs := make([]string, 0, len(redisData.Items))
+	qtyMap := make(map[string]int)
+	for _, item := range redisData.Items {
+		productIDs = append(productIDs, item.ProductID)
+		qtyMap[item.ProductID] = item.Qty
+	}
+
+	totalWeight, err := s.calculateTotalWeight(redisData.Items)
+	if err != nil {
+		return nil, err
+	}
+
+	shippingReq := &dto.ShippingCostRequest{
+		Origin:          storeConfig.DistrictID,
+		Destination:     address.DistrictID,
+		OriginName:      fmt.Sprintf("%s, %s, %s, %s, %s %s", storeConfig.AdditionalAddress, storeConfig.SubDistrictName, storeConfig.DistrictName, storeConfig.CityName, storeConfig.ProvinceName, storeConfig.ZipCode),
+		DestinationName: fmt.Sprintf("%s, %s, %s, %s, %s %s", address.AdditionalAddress, address.SubDistrictName, address.DistrictName, address.CityName, address.ProvinceName, address.ZipCode),
+		Weight:          totalWeight,
+	}
+
+	log.Println("fee bagian 2")
+
+	return s.rajaOngkirService.CalculateShippingCost(shippingReq)
 }
 
 func (s *checkoutService) buildDiscountResponses(discounts []entity.Discount, price entity.ProductPrice, now time.Time) []dto.DiscountResponse {
@@ -227,4 +370,56 @@ func (s *checkoutService) buildDiscountResponses(discounts []entity.Discount, pr
 	}
 
 	return responses
+}
+
+func (s *checkoutService) calculateTotalWeight(items []dto.CheckoutRedisItem) (int, error) {
+	productIDs := make([]string, 0, len(items))
+	for _, item := range items {
+		productIDs = append(productIDs, item.ProductID)
+	}
+
+	products, err := s.productRepository.GetWeightDataByProductIDs(productIDs)
+	if err != nil {
+		return 0, &errorhandler.InternalServerError{Message: "Gagal menghitung berat"}
+	}
+
+	productMap := make(map[string]entity.Product)
+	for _, p := range products {
+		productMap[p.ProductID] = p
+	}
+
+	totalActualGram := 0
+	totalVolumeGram := 0
+
+	for _, item := range items {
+		p, exists := productMap[item.ProductID]
+		if !exists {
+			continue
+		}
+
+		// Versi 1: total berat aktual semua item
+		totalActualGram += p.WeightGram * item.Qty
+
+		// Versi 2: total berat volume semua item
+		volumeKg := float64(p.LengthCm) * float64(p.WidthCm) * float64(p.HeightCm) / 6000.0
+		totalVolumeGram += int(volumeKg*1000) * item.Qty
+	}
+
+	totalGram := totalActualGram
+	if totalVolumeGram > totalActualGram {
+		totalGram = totalVolumeGram
+	}
+
+	totalKg := totalGram / 1000
+	remainderGram := totalGram % 1000
+
+	if remainderGram > 290 {
+		totalKg += 1
+	}
+
+	if totalKg == 0 {
+		totalKg = 1
+	}
+
+	return totalKg * 1000, nil
 }

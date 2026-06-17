@@ -25,6 +25,7 @@ type ProductRepository interface {
 	GetProductEnriched(productID string) (*dto.ProductEnrichedForES, error)
 	GetAllProductsPaginated(cursor *dto.Paginate, search string, limit int) ([]dto.ProductListRow, error)
 	GetProductsEnrichedBatch(productIDs []string) ([]*dto.ProductEnrichedForES, error)
+	GetWeightDataByProductIDs(productIDs []string) ([]entity.Product, error)
 }
 
 type productRepository struct {
@@ -512,5 +513,18 @@ func (r *productRepository) GetProductsEnrichedBatch(productIDs []string) ([]*dt
 		}
 	}
 
+	return products, nil
+}
+
+func (r *productRepository) GetWeightDataByProductIDs(productIDs []string) ([]entity.Product, error) {
+	if len(productIDs) == 0 {
+		return nil, nil
+	}
+	var products []entity.Product
+	err := r.db.Where("product_id IN ? AND status = 1", productIDs).
+		Find(&products).Error
+	if err != nil {
+		return nil, err
+	}
 	return products, nil
 }

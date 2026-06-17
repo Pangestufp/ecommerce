@@ -12,7 +12,7 @@ const ApiCart = {
     return res
   },
   checkout: async (listCart) => {
-    const res = await api.post(Endpoints.CART.CHECKOUT, {
+    const res = await api.post(Endpoints.CHECKOUT.CREATE, {
       list_cart: listCart.map(item => ({
         product_id: item.id,
         qty: item.qty,

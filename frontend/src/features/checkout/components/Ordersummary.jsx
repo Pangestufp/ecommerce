@@ -2,14 +2,16 @@ import { formatRupiah, getUnitPrice } from "../checkoutHelpers";
 
 /**
  * OrderSummary
- * Ringkasan harga: breakdown per produk dan grand total.
+ * Ringkasan harga: breakdown per produk, ongkir, dan grand total.
  *
  * Props:
  *  - products       : array product_price dari API
  *  - productStates  : { [product_id]: { qty, selectedDiscountId } }
+ *  - subtotal       : number
+ *  - selectedCourier: object kurir terpilih | null
  *  - grandTotal     : number, total keseluruhan
  */
-export default function OrderSummary({ products, productStates, grandTotal }) {
+export default function OrderSummary({ products, productStates, subtotal, selectedCourier, grandTotal }) {
   return (
     <div className="bg-white rounded-2xl border border-gray-100 px-4 py-4 mb-3">
       <p className="text-sm font-semibold text-gray-800 mb-3">Ringkasan Harga</p>
@@ -35,9 +37,30 @@ export default function OrderSummary({ products, productStates, grandTotal }) {
         })}
       </div>
 
-      <div className="border-t border-gray-100 mt-3 pt-3 flex justify-between items-center">
-        <span className="text-sm font-semibold text-gray-700">Total</span>
-        <span className="text-base font-bold text-gray-900">{formatRupiah(grandTotal)}</span>
+      <div className="border-t border-gray-100 mt-3 pt-3 flex flex-col gap-2">
+        <div className="flex justify-between items-center">
+          <span className="text-xs text-gray-500">Subtotal</span>
+          <span className="text-xs font-medium text-gray-800">{formatRupiah(subtotal)}</span>
+        </div>
+
+        <div className="flex justify-between items-center">
+          <span className="text-xs text-gray-500">
+            Ongkos Kirim
+            {selectedCourier && (
+              <span className="text-gray-400 ml-1">({selectedCourier.display_name})</span>
+            )}
+          </span>
+          <span className="text-xs font-medium text-gray-800">
+            {selectedCourier ? formatRupiah(selectedCourier.cost) : (
+              <span className="text-gray-300">Belum dipilih</span>
+            )}
+          </span>
+        </div>
+
+        <div className="flex justify-between items-center border-t border-gray-100 pt-2 mt-1">
+          <span className="text-sm font-semibold text-gray-700">Total</span>
+          <span className="text-base font-bold text-gray-900">{formatRupiah(grandTotal)}</span>
+        </div>
       </div>
     </div>
   );

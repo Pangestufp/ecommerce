@@ -3,6 +3,7 @@ package service
 import (
 	"backend/dto"
 	"backend/errorhandler"
+	"backend/helper"
 	"backend/repository"
 	"context"
 	"encoding/json"
@@ -10,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	neturl "net/url"
+	"sort"
 	"strings"
 	"time"
 
@@ -25,7 +27,7 @@ type RajaOngkirService interface {
 	FindCityByID(provinceID string, cityID string) (string, string, error)
 	FindDistrictByID(cityID string, districtID string) (string, string, error)
 	FindSubDistrictByID(districtID string, subDistrictID string) (string, string, string, error)
-	CalculateShippingCost(req *dto.ShippingCostRequest) ([]dto.ShippingOption, error)
+	CalculateShippingCost(req *dto.ShippingCostRequest) (*dto.ShippingResponse, error)
 }
 
 type rajaOngkirService struct {
@@ -242,16 +244,21 @@ func (s *rajaOngkirService) getActiveCourierString() (string, error) {
 	return strings.Join(codes, ":"), nil
 }
 
-func (s *rajaOngkirService) CalculateShippingCost(req *dto.ShippingCostRequest) ([]dto.ShippingOption, error) {
+func (s *rajaOngkirService) CalculateShippingCost(req *dto.ShippingCostRequest) (*dto.ShippingResponse, error) {
+	cacheKey := fmt.Sprintf(
+		"ongkir:cost:%s:%s:%d",
+		req.Origin,
+		req.Destination,
+		req.Weight,
+	)
 
-	cacheKey := fmt.Sprintf("ongkir:cost:%s:%s:%d", req.Origin, req.Destination, req.Weight)
 	ctx := context.Background()
 
 	cached, err := s.redis.Get(ctx, cacheKey).Result()
 	if err == nil {
-		var result []dto.ShippingOption
-		json.Unmarshal([]byte(cached), &result)
-		return result, nil
+		var result dto.ShippingResponse
+		_ = json.Unmarshal([]byte(cached), &result)
+		return &result, nil
 	}
 
 	courierString, err := s.getActiveCourierString()
@@ -268,10 +275,15 @@ func (s *rajaOngkirService) CalculateShippingCost(req *dto.ShippingCostRequest) 
 	formData.Set("courier", courierString)
 	formData.Set("price", "lowest")
 
-	httpReq, err := http.NewRequest("POST", url, strings.NewReader(formData.Encode()))
+	httpReq, err := http.NewRequest(
+		"POST",
+		url,
+		strings.NewReader(formData.Encode()),
+	)
 	if err != nil {
 		return nil, &errorhandler.InternalServerError{Message: err.Error()}
 	}
+
 	httpReq.Header.Set("key", s.apiKey)
 	httpReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
@@ -286,19 +298,83 @@ func (s *rajaOngkirService) CalculateShippingCost(req *dto.ShippingCostRequest) 
 		return nil, &errorhandler.InternalServerError{Message: err.Error()}
 	}
 
-	var result struct {
-		Data []dto.ShippingOption `json:"data"`
+	var raw struct {
+		Data []struct {
+			Name        string `json:"name"`
+			Code        string `json:"code"`
+			Service     string `json:"service"`
+			Description string `json:"description"`
+			Cost        int    `json:"cost"`
+			Etd         string `json:"etd"`
+		} `json:"data"`
 	}
-	if err := json.Unmarshal(body, &result); err != nil {
+
+	if err := json.Unmarshal(body, &raw); err != nil {
 		return nil, &errorhandler.InternalServerError{Message: err.Error()}
 	}
 
-	if len(result.Data) == 0 {
-		return nil, &errorhandler.NotFoundError{Message: "Tidak ada layanan pengiriman tersedia untuk rute ini"}
+	// group per kurir: code -> ShippingGroupService
+	courierMap := make(map[string]*dto.ShippingGroupService)
+	courierOrder := []string{}
+
+	for _, item := range raw.Data {
+		if !helper.IsAllowedCourier(item.Code, item.Service) {
+			continue
+		}
+
+		option := dto.ShippingOption{
+			Service:     item.Service,
+			Description: item.Description,
+			Cost:        item.Cost,
+			Etd:         item.Etd,
+			DisplayName: helper.BuildDisplayName(item.Name, item.Service),
+			Group:       helper.GetShippingGroup(item.Service),
+		}
+
+		if _, exists := courierMap[item.Code]; !exists {
+			courierMap[item.Code] = &dto.ShippingGroupService{
+				Name:   item.Name,
+				Code:   item.Code,
+				Option: []dto.ShippingOption{},
+			}
+			courierOrder = append(courierOrder, item.Code)
+		}
+
+		courierMap[item.Code].Option = append(courierMap[item.Code].Option, option)
 	}
 
-	encoded, _ := json.Marshal(result.Data)
+	if len(courierMap) == 0 {
+		return nil, &errorhandler.NotFoundError{
+			Message: "Tidak ada layanan pengiriman tersedia untuk rute ini",
+		}
+	}
+
+	services := make([]dto.ShippingGroupService, 0, len(courierOrder))
+	for _, code := range courierOrder {
+		group := courierMap[code]
+
+		sort.Slice(group.Option, func(i, j int) bool {
+			return group.Option[i].Cost < group.Option[j].Cost
+		})
+
+		helper.MarkRecommended(group.Option)
+
+		services = append(services, *group)
+	}
+
+	// sort kurir by cheapest option
+	sort.Slice(services, func(i, j int) bool {
+		return services[i].Option[0].Cost < services[j].Option[0].Cost
+	})
+
+	result := &dto.ShippingResponse{
+		OriginName:      req.OriginName,
+		DestinationName: req.DestinationName,
+		ShippingService: services,
+	}
+
+	encoded, _ := json.Marshal(result)
 	s.redis.Set(ctx, cacheKey, encoded, 2*time.Minute)
 
-	return result.Data, nil
+	return result, nil
 }
