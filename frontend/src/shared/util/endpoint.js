@@ -57,7 +57,15 @@ class Endpoints {
 
   static CART = {
     VERIFY: `/api/verify-cart`,
-    CHECKOUT: `/api/verify-checkout`,
+  }
+
+  static CHECKOUT = {
+    CREATE: "/api/checkout",
+    DETAIL: (id) => `/api/checkout/${id}`,
+  }
+
+  static COURIER = {
+    GET: "/api/courier-fee",
   }
 
 }

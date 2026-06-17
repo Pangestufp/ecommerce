@@ -94,7 +94,7 @@ function AppRouter() {
         }
       />
       <Route
-        path="/checkout"
+        path="/checkout/:id"
         element={
           <ProtectedRoute>
             <AppLayout>
