@@ -8,6 +8,10 @@ type BadRequestError struct {
 	Message string
 }
 
+type ConflictError struct {
+	Message string
+}
+
 type InternalServerError struct {
 	Message string
 }
@@ -37,5 +41,9 @@ func (e *UnauthorizedError) Error() string {
 }
 
 func (e *ForbiddenError) Error() string {
+	return e.Message
+}
+
+func (e *ConflictError) Error() string {
 	return e.Message
 }

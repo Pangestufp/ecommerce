@@ -119,108 +119,17 @@ func (s *checkoutService) CreateCheckout(req *dto.CartRequest, userID string) (*
 
 func (s *checkoutService) GetCheckout(checkoutID string, userID string) (*dto.VerifyCheckoutResponse, error) {
 	ctx := context.Background()
-	cacheKey := fmt.Sprintf("checkout:%s", checkoutID)
-
-	cached, err := s.redis.Get(ctx, cacheKey).Result()
-	if err == redis.Nil {
-		return nil, &errorhandler.NotFoundError{Message: "Sesi checkout tidak ditemukan atau sudah kedaluwarsa"}
-	}
-	if err != nil {
-		return nil, &errorhandler.InternalServerError{Message: "Gagal mengambil sesi checkout"}
-	}
-
-	var redisData dto.CheckoutRedisData
-	if err := json.Unmarshal([]byte(cached), &redisData); err != nil {
-		return nil, &errorhandler.InternalServerError{Message: "Data checkout tidak valid"}
-	}
-
-	// Validasi kepemilikan
-	if redisData.UserID != userID {
-		return nil, &errorhandler.BadRequestError{Message: "Akses tidak diizinkan"}
-	}
-
-	// Enrich data produk (sama seperti VerifyCheckout lama)
-	productIDs := make([]string, 0, len(redisData.Items))
-	qtyMap := make(map[string]int)
-	for _, item := range redisData.Items {
-		productIDs = append(productIDs, item.ProductID)
-		qtyMap[item.ProductID] = item.Qty
-	}
-
-	enriched, err := s.productRepository.GetProductsEnrichedBatch(productIDs)
-	if err != nil {
-		return nil, &errorhandler.InternalServerError{Message: "Error mengambil data produk"}
-	}
-
 	now := helper.TimeNowWIB()
-
-	allDiscounts, err := s.discountRepository.GetActiveDiscountsByProductIDs(productIDs, now)
+	result, err := s.getAndValidateCheckout(ctx, checkoutID, userID, now)
 	if err != nil {
-		allDiscounts = []entity.Discount{}
-	}
-
-	allPrices, err := s.priceRepository.GetLatestByProductIDs(productIDs)
-	if err != nil {
-		return nil, &errorhandler.InternalServerError{Message: "Error ambil harga produk"}
-	}
-
-	productMap := make(map[string]*dto.ProductEnrichedForES)
-	for _, p := range enriched {
-		productMap[p.ProductID] = p
-	}
-
-	discountMap := make(map[string][]entity.Discount)
-	for _, d := range allDiscounts {
-		discountMap[d.ProductID] = append(discountMap[d.ProductID], d)
-	}
-
-	priceMap := make(map[string]entity.ProductPrice)
-	for _, p := range allPrices {
-		if _, exists := priceMap[p.ProductID]; !exists {
-			priceMap[p.ProductID] = p
-		}
+		return nil, err
 	}
 
 	var listProduct []dto.ProductCheckoutData
-	for _, item := range redisData.Items {
-		product, exists := productMap[item.ProductID]
-		if !exists || product.Available == 0 {
-			continue
+	for _, v := range result.Items {
+		if !v.Removed {
+			listProduct = append(listProduct, v.Product)
 		}
-
-		price, hasPrice := priceMap[product.ProductID]
-		if !hasPrice {
-			continue
-		}
-
-		cacheKey := fmt.Sprintf("image:%s", product.PrimaryImageID)
-		presignedURL := ""
-
-		imageCached, err := s.redis.Get(ctx, cacheKey).Result()
-		if err == nil {
-			presignedURL = imageCached
-		} else {
-			url, err := s.minio.PresignedGetObject(ctx, s.bucket, product.PrimaryImage, time.Minute*5, nil)
-			if err != nil {
-				log.Printf("Failed to generate presigned URL for %s: %v", product.PrimaryImage, err)
-				continue
-			}
-			presignedURL = url.String()
-			s.redis.Set(ctx, cacheKey, presignedURL, 4*time.Minute)
-		}
-
-		discountResponses := s.buildDiscountResponses(discountMap[product.ProductID], price, now)
-
-		listProduct = append(listProduct, dto.ProductCheckoutData{
-			ProductID:          product.ProductID,
-			ProductName:        product.ProductName,
-			Image:              presignedURL,
-			AvailableStock:     int(product.AvailableStock),
-			Qty:                qtyMap[product.ProductID],
-			ProductPrice:       product.ProductPrice,
-			ProductPriceFormat: helper.FormatRupiah(product.ProductPrice),
-			Discounts:          discountResponses,
-		})
 	}
 
 	addresses, err := s.addressRepository.GetAddressByUserID(userID)
@@ -252,10 +161,7 @@ func (s *checkoutService) GetCheckout(checkoutID string, userID string) (*dto.Ve
 		})
 	}
 
-	return &dto.VerifyCheckoutResponse{
-		ProductPrice: listProduct,
-		User_Address: addressResponses,
-	}, nil
+	return &dto.VerifyCheckoutResponse{ProductPrice: listProduct, User_Address: addressResponses}, nil
 }
 
 func (s *checkoutService) CalculateShippingFromAddress(req *dto.ShippingRequest, userID string) (*dto.ShippingResponse, error) {
@@ -422,4 +328,150 @@ func (s *checkoutService) calculateTotalWeight(items []dto.CheckoutRedisItem) (i
 	}
 
 	return totalKg * 1000, nil
+}
+
+func (s *checkoutService) getAndValidateCheckout(ctx context.Context, checkoutID string, userID string, now time.Time) (*dto.CheckoutValidationResult, error) {
+
+	cacheKey := fmt.Sprintf("checkout:%s", checkoutID)
+	cached, err := s.redis.Get(ctx, cacheKey).Result()
+	if err == redis.Nil {
+		return nil, &errorhandler.NotFoundError{Message: "Sesi checkout tidak ditemukan atau sudah kedaluwarsa"}
+	}
+	if err != nil {
+		return nil, &errorhandler.InternalServerError{Message: "Gagal mengambil sesi checkout"}
+	}
+
+	var redisData dto.CheckoutRedisData
+	if err := json.Unmarshal([]byte(cached), &redisData); err != nil {
+		return nil, &errorhandler.InternalServerError{Message: "Data checkout tidak valid"}
+	}
+
+	if redisData.UserID != userID {
+		return nil, &errorhandler.BadRequestError{Message: "Akses tidak diizinkan"}
+	}
+
+	items, err := s.validateAndEnrichCheckoutItems(ctx, redisData.Items, now)
+	if err != nil {
+		return nil, err
+	}
+
+	return &dto.CheckoutValidationResult{RedisData: redisData, Items: items}, nil
+}
+
+func (s *checkoutService) validateAndEnrichCheckoutItems(ctx context.Context, items []dto.CheckoutRedisItem, now time.Time) ([]dto.CheckoutItemValidation, error) {
+
+	productIDs := make([]string, 0, len(items))
+	qtyMap := make(map[string]int)
+	for _, item := range items {
+		productIDs = append(productIDs, item.ProductID)
+		qtyMap[item.ProductID] = item.Qty
+	}
+
+	enriched, err := s.productRepository.GetProductsEnrichedBatch(productIDs)
+	if err != nil {
+		return nil, &errorhandler.InternalServerError{Message: "Error mengambil data produk"}
+	}
+
+	allDiscounts, err := s.discountRepository.GetActiveDiscountsByProductIDs(productIDs, now)
+	if err != nil {
+		allDiscounts = []entity.Discount{}
+	}
+
+	allPrices, err := s.priceRepository.GetLatestByProductIDs(productIDs)
+	if err != nil {
+		return nil, &errorhandler.InternalServerError{Message: "Error ambil harga produk"}
+	}
+
+	productMap := make(map[string]*dto.ProductEnrichedForES)
+	for _, p := range enriched {
+		productMap[p.ProductID] = p
+	}
+
+	discountMap := make(map[string][]entity.Discount)
+	for _, d := range allDiscounts {
+		discountMap[d.ProductID] = append(discountMap[d.ProductID], d)
+	}
+
+	priceMap := make(map[string]entity.ProductPrice)
+	for _, p := range allPrices {
+		if _, exists := priceMap[p.ProductID]; !exists {
+			priceMap[p.ProductID] = p
+		}
+	}
+
+	var results []dto.CheckoutItemValidation
+	for _, item := range items {
+		product, exists := productMap[item.ProductID]
+		if !exists || product.Available == 0 {
+			results = append(results, dto.CheckoutItemValidation{
+				OriginalQty: item.Qty,
+				Removed:     true,
+			})
+			continue
+		}
+
+		price, hasPrice := priceMap[product.ProductID]
+		if !hasPrice {
+			results = append(results, dto.CheckoutItemValidation{
+				OriginalQty: item.Qty,
+				Removed:     true,
+			})
+			continue
+		}
+
+		// INI BAGIAN YANG HILANG SEBELUMNYA: re-clamp qty ke stok TERKINI,
+		// bukan cuma percaya qty yang sudah di-cache di Redis 30 menit lalu.
+		adjustedQty := item.Qty
+		wasAdjusted := false
+		if int64(adjustedQty) > product.AvailableStock {
+			adjustedQty = int(product.AvailableStock)
+			wasAdjusted = true
+		}
+		if adjustedQty == 0 {
+			results = append(results, dto.CheckoutItemValidation{
+				OriginalQty: item.Qty,
+				Removed:     true,
+			})
+			continue
+		}
+
+		cacheKey := fmt.Sprintf("image:%s", product.PrimaryImageID)
+		presignedURL := ""
+		imageCached, err := s.redis.Get(ctx, cacheKey).Result()
+		if err == nil {
+			presignedURL = imageCached
+		} else {
+			url, err := s.minio.PresignedGetObject(ctx, s.bucket, product.PrimaryImage, time.Minute*5, nil)
+			if err != nil {
+				log.Printf("Failed to generate presigned URL for %s: %v", product.PrimaryImage, err)
+				results = append(results, dto.CheckoutItemValidation{
+					OriginalQty: item.Qty,
+					Removed:     true,
+				})
+				continue
+			}
+			presignedURL = url.String()
+			s.redis.Set(ctx, cacheKey, presignedURL, 4*time.Minute)
+		}
+
+		discountResponses := s.buildDiscountResponses(discountMap[product.ProductID], price, now)
+
+		results = append(results, dto.CheckoutItemValidation{
+			OriginalQty: item.Qty,
+			AdjustedQty: adjustedQty,
+			WasAdjusted: wasAdjusted,
+			Product: dto.ProductCheckoutData{
+				ProductID:          product.ProductID,
+				ProductName:        product.ProductName,
+				Image:              presignedURL,
+				AvailableStock:     int(product.AvailableStock),
+				Qty:                adjustedQty,
+				ProductPrice:       product.ProductPrice,
+				ProductPriceFormat: helper.FormatRupiah(product.ProductPrice),
+				Discounts:          discountResponses,
+			},
+		})
+	}
+
+	return results, nil
 }

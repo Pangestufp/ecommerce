@@ -42,3 +42,16 @@ type ShippingRequest struct {
 	CheckoutID string `json:"checkout_id"`
 	AddressID  string `json:"address_id"`
 }
+
+type CheckoutItemValidation struct {
+	Product     ProductCheckoutData
+	OriginalQty int
+	AdjustedQty int
+	WasAdjusted bool
+	Removed     bool
+}
+
+type CheckoutValidationResult struct {
+	RedisData CheckoutRedisData
+	Items     []CheckoutItemValidation
+}

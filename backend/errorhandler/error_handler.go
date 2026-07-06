@@ -21,6 +21,8 @@ func ErrorHandler(c *gin.Context, err error) {
 		statusCode = http.StatusUnauthorized
 	case *ForbiddenError:
 		statusCode = http.StatusForbidden
+	case *ConflictError:
+		statusCode = http.StatusConflict
 	}
 
 	response := helper.BuildResponse(dto.ResponseParam{
