@@ -6,7 +6,7 @@ import (
 	"backend/errorhandler"
 	"backend/helper"
 	"backend/repository"
-	"backend/server"
+	"backend/worker"
 	"context"
 	"fmt"
 	"log"
@@ -257,7 +257,7 @@ func (s *productService) Create(req dto.CreateProductRequest, userID string) (*d
 			s.repo.CreateProductImages(images)
 		}
 
-		server.Instance.ProductEventChan <- &dto.ProductEvent{
+		worker.Instance.ProductEventChan <- &dto.ProductEvent{
 			ProductID: product.ProductID,
 			Type:      "create product",
 		}
@@ -422,7 +422,7 @@ func (s *productService) Update(productID string, req dto.UpdateProductRequest, 
 				s.repo.CreateProductImages(images)
 			}
 
-			server.Instance.ProductEventChan <- &dto.ProductEvent{
+			worker.Instance.ProductEventChan <- &dto.ProductEvent{
 				ProductID: product.ProductID,
 				Type:      "Update product",
 			}
@@ -559,7 +559,7 @@ func (s *productService) Delete(productID string, userID string) error {
 	}
 
 	go func() {
-		server.Instance.ProductEventChan <- &dto.ProductEvent{
+		worker.Instance.ProductEventChan <- &dto.ProductEvent{
 			ProductID: productID,
 			Type:      "create product price",
 		}
@@ -644,9 +644,9 @@ func (s *productService) GetProductBySearch(search string, page, limit int) ([]*
 	from := (page - 1) * limit
 
 	if clean == "" {
-		products, err = server.Instance.GetAllProducts(from, limit)
+		products, err = worker.Instance.GetAllProducts(from, limit)
 	} else {
-		products, err = server.Instance.SearchProducts(search, from, limit)
+		products, err = worker.Instance.SearchProducts(search, from, limit)
 	}
 
 	return products, err

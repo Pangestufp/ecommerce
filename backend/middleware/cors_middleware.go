@@ -17,7 +17,7 @@ func CORSMiddleware() gin.HandlerFunc {
 			"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS",
 		},
 		AllowHeaders: []string{
-			"Origin", "Content-Type", "Authorization",
+			"Origin", "Content-Type", "Authorization", "Idempotency-Key",
 		},
 		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,

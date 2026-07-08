@@ -6,6 +6,7 @@ import (
 	"backend/errorhandler"
 	"backend/helper"
 	"backend/repository"
+	"backend/worker"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -22,6 +23,8 @@ type CheckoutService interface {
 	CreateCheckout(req *dto.CartRequest, userID string) (*dto.CreateCheckoutResponse, error)
 	GetCheckout(checkoutID string, userID string) (*dto.VerifyCheckoutResponse, error)
 	CalculateShippingFromAddress(req *dto.ShippingRequest, userID string) (*dto.ShippingResponse, error)
+	ConfirmCheckout(req *dto.ConfirmCheckoutRequest, userID string, idempotencyKey string) (*dto.ConfirmCheckoutResponse, error)
+	GetCheckoutStatus(idempotencyKey string, userID string) (*dto.CheckoutStatusResponse, error)
 }
 
 type checkoutService struct {
@@ -29,6 +32,7 @@ type checkoutService struct {
 	discountRepository repository.DiscountRepository
 	priceRepository    repository.ProductPriceRepository
 	addressRepository  repository.AddressRepository
+	idempotencyRepo    repository.IdempotencyRepository
 	storeConfigService StoreConfigService
 	rajaOngkirService  RajaOngkirService
 	minio              *minio.Client
@@ -36,12 +40,13 @@ type checkoutService struct {
 	bucket             string
 }
 
-func NewCheckoutService(productRepository repository.ProductRepository, discountRepository repository.DiscountRepository, priceRepository repository.ProductPriceRepository, addressRepository repository.AddressRepository, storeConfigService StoreConfigService, rajaOngkirService RajaOngkirService, minio *minio.Client, redis *redis.Client, bucket string) *checkoutService {
+func NewCheckoutService(productRepository repository.ProductRepository, discountRepository repository.DiscountRepository, priceRepository repository.ProductPriceRepository, addressRepository repository.AddressRepository, idempotencyRepo repository.IdempotencyRepository, storeConfigService StoreConfigService, rajaOngkirService RajaOngkirService, minio *minio.Client, redis *redis.Client, bucket string) *checkoutService {
 	return &checkoutService{
 		productRepository:  productRepository,
 		discountRepository: discountRepository,
 		priceRepository:    priceRepository,
 		addressRepository:  addressRepository,
+		idempotencyRepo:    idempotencyRepo,
 		storeConfigService: storeConfigService,
 		rajaOngkirService:  rajaOngkirService,
 		minio:              minio,
@@ -474,4 +479,190 @@ func (s *checkoutService) validateAndEnrichCheckoutItems(ctx context.Context, it
 	}
 
 	return results, nil
+}
+
+func (s *checkoutService) ConfirmCheckout(req *dto.ConfirmCheckoutRequest, userID string, idempotencyKey string) (*dto.ConfirmCheckoutResponse, error) {
+
+	if idempotencyKey == "" {
+		return nil, &errorhandler.BadRequestError{Message: "Header Idempotency-Key wajib diisi"}
+	}
+	if len(req.Items) == 0 {
+		return nil, &errorhandler.BadRequestError{Message: "Item checkout tidak boleh kosong"}
+	}
+
+	ctx := context.Background()
+	now := helper.TimeNowWIB()
+
+	result, err := s.getAndValidateCheckout(ctx, req.CheckoutID, userID, now)
+	if err != nil {
+		return nil, err
+	}
+
+	weight, err := s.calculateTotalWeight(result.RedisData.Items)
+	if err != nil {
+		return nil, err
+	}
+
+	address, err := s.addressRepository.GetAddressByIDAndUserID(req.AddressID, userID)
+	if err != nil {
+		return nil, &errorhandler.InternalServerError{
+			Message: "Gagal mengambil alamat",
+		}
+	}
+
+	if address == nil {
+		return nil, &errorhandler.NotFoundError{
+			Message: "Alamat tidak ditemukan",
+		}
+	}
+
+	storeConfig, err := s.storeConfigService.GetConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	shippingReq := &dto.ShippingCostRequest{
+		Origin:      storeConfig.DistrictID,
+		Destination: address.DistrictID,
+		Weight:      weight,
+	}
+
+	shippingResp, err := s.rajaOngkirService.CalculateShippingCost(shippingReq)
+	if err != nil {
+		return nil, err
+	}
+
+	var actualCost decimal.Decimal
+	found := false
+
+	for _, courier := range shippingResp.ShippingService {
+
+		// Cocokkan courier
+		if courier.Code != req.CourierCode {
+			continue
+		}
+
+		for _, option := range courier.Option {
+
+			// Cocokkan service
+			if option.Service != req.CourierService {
+				continue
+			}
+
+			actualCost = decimal.NewFromInt(int64(option.Cost))
+			req.ShippingETD = option.Etd
+			req.ShippingDescription = option.Description
+			found = true
+
+			break
+		}
+
+		if found {
+			break
+		}
+	}
+
+	if !found {
+		return nil, &errorhandler.BadRequestError{
+			Message: "Layanan pengiriman tidak ditemukan",
+		}
+	}
+
+	if !actualCost.Equal(req.ShippingCost) {
+		return nil, &errorhandler.BadRequestError{
+			Message: "Biaya pengiriman telah berubah, silakan pilih kembali layanan pengiriman",
+		}
+	}
+
+	statusKey := fmt.Sprintf("idempotency:status:%s", idempotencyKey)
+
+	// Kalau key ini sudah ada di Redis (entah QUEUED, PROCESSING, SUCCESS, atau FAILED),
+	// langsung balik status saat ini — tidak perlu re-enqueue.
+	if cached, err := s.redis.Get(ctx, statusKey).Result(); err == nil {
+		var existing dto.CheckoutStatusResponse
+		if json.Unmarshal([]byte(cached), &existing) == nil {
+			return &dto.ConfirmCheckoutResponse{
+				IdempotencyKey: idempotencyKey,
+				Status:         existing.Status,
+			}, nil
+		}
+	}
+
+	// Tandai QUEUED sebelum enqueue supaya retry yang datang sebelum worker
+	// sempat mengambil job tidak akan enqueue ulang.
+	queued := dto.CheckoutStatusResponse{
+		IdempotencyKey: idempotencyKey,
+		Status:         "QUEUED",
+	}
+	if encoded, err := json.Marshal(queued); err == nil {
+		// TTL 0 = tidak expired, akan di-overwrite worker saat selesai
+		if err := s.redis.Set(ctx, statusKey, string(encoded), 0).Err(); err != nil {
+			log.Printf("[ConfirmCheckout] gagal set QUEUED ke Redis: %v", err)
+		}
+	}
+
+	job := worker.CheckoutJob{
+		Req:            req,
+		UserID:         userID,
+		IdempotencyKey: idempotencyKey,
+	}
+
+	// worker.Instance adalah singleton yang sudah di-Initialize() sekali di main.
+	if err := worker.InstanceCheckOut.Enqueue(job); err != nil {
+		// Rollback status QUEUED supaya client bisa coba lagi dengan key yang sama
+		s.redis.Del(ctx, statusKey)
+		return nil, err
+	}
+
+	return &dto.ConfirmCheckoutResponse{
+		IdempotencyKey: idempotencyKey,
+		Status:         "QUEUED",
+	}, nil
+}
+
+func (s *checkoutService) GetCheckoutStatus(idempotencyKey string, userID string) (*dto.CheckoutStatusResponse, error) {
+
+	if idempotencyKey == "" {
+		return nil, &errorhandler.BadRequestError{Message: "Idempotency-Key tidak valid"}
+	}
+
+	ctx := context.Background()
+	statusKey := fmt.Sprintf("idempotency:status:%s", idempotencyKey)
+
+	if cached, err := s.redis.Get(ctx, statusKey).Result(); err == nil {
+		var resp dto.CheckoutStatusResponse
+		if json.Unmarshal([]byte(cached), &resp) == nil {
+			return &resp, nil
+		}
+	} else if err != redis.Nil {
+		log.Printf("[GetCheckoutStatus] redis error key=%s: %v", statusKey, err)
+	}
+
+	record, err := s.idempotencyRepo.CheckoutFindByKeyForPolling(idempotencyKey, userID)
+	if err != nil {
+		return nil, &errorhandler.InternalServerError{Message: "Gagal mengambil status checkout"}
+	}
+	if record == nil {
+		return nil, &errorhandler.NotFoundError{Message: "Idempotency key tidak ditemukan"}
+	}
+
+	// Kalau ResponseBody ada (biasanya status SUCCESS), gunakan langsung
+	if record.ResponseBody != "" {
+		var resp dto.CheckoutStatusResponse
+		if json.Unmarshal([]byte(record.ResponseBody), &resp) == nil {
+			// Re-cache ke Redis supaya polling berikutnya tidak ke DB lagi
+			if encoded, err := json.Marshal(resp); err == nil {
+				s.redis.Set(ctx, statusKey, string(encoded), 0)
+			}
+			return &resp, nil
+		}
+	}
+
+	// Fallback kalau ResponseBody kosong (status QUEUED/PROCESSING/FAILED dari DB)
+	resp := &dto.CheckoutStatusResponse{
+		IdempotencyKey: idempotencyKey,
+		Status:         record.Status,
+		ErrorMessage:   record.ErrorMessage,
+	}
+	return resp, nil
 }

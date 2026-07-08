@@ -26,15 +26,15 @@ type TypeService interface {
 }
 
 type typeService struct {
-	repository repository.TypeRepository
+	repository     repository.TypeRepository
 	userRepository repository.UserRepository // Taambahan
 	logRepository  repository.LogRepository  // tambahan
-	redis      *redis.Client
+	redis          *redis.Client
 }
 
-func NewTypeService(repository repository.TypeRepository, redis *redis.Client,userRepository repository.UserRepository,
-	logRepository repository.LogRepository ) *typeService {
-	return &typeService{repository: repository, redis: redis, userRepository: userRepository,logRepository: logRepository}
+func NewTypeService(repository repository.TypeRepository, redis *redis.Client, userRepository repository.UserRepository,
+	logRepository repository.LogRepository) *typeService {
+	return &typeService{repository: repository, redis: redis, userRepository: userRepository, logRepository: logRepository}
 }
 
 func (s *typeService) CreateType(req *dto.TypeRequest, userID string) (*dto.TypeResponse, error) {
@@ -73,7 +73,7 @@ func (s *typeService) CreateType(req *dto.TypeRequest, userID string) (*dto.Type
 		return nil, &errorhandler.InternalServerError{Message: err.Error()}
 	}
 
-	 s.logRepository.Create(&entity.Log{
+	s.logRepository.Create(&entity.Log{
 		LogID:         uuid.New().String(),
 		ReferenceType: "TYPE",
 		ReferenceID:   t.TypeID,
@@ -86,7 +86,6 @@ func (s *typeService) CreateType(req *dto.TypeRequest, userID string) (*dto.Type
 		SourceName:    "CREATE_TYPE",
 		SourceType:    "TYPE",
 	})
-
 
 	response := dto.TypeResponse{
 		TypeID:   t.TypeID,
@@ -125,28 +124,26 @@ func (s *typeService) UpdateType(typeID string, req *dto.TypeRequest, userID str
 	if err != nil {
 		return nil, &errorhandler.NotFoundError{Message: "Type Not Found"}
 	}
-	
 
-//penambahan
+	//penambahan
 	var changes []string
-	newCode := helper.UpperAndTrim(req.TypeCode) 
-    if newCode != t.TypeCode { 
-        existing, _ := s.repository.GetTypeByTypeCode(newCode)
-        if existing != nil {
-            return nil, &errorhandler.ForbiddenError{Message: "Type Code Telah digunakan"}
-        }
-        changes = append(changes, fmt.Sprintf("Type Code: '%s' → '%s'", t.TypeCode, newCode)) 
-    }
+	newCode := helper.UpperAndTrim(req.TypeCode)
+	if newCode != t.TypeCode {
+		existing, _ := s.repository.GetTypeByTypeCode(newCode)
+		if existing != nil {
+			return nil, &errorhandler.ForbiddenError{Message: "Type Code Telah digunakan"}
+		}
+		changes = append(changes, fmt.Sprintf("Type Code: '%s' → '%s'", t.TypeCode, newCode))
+	}
 
 	// Cek perubahan Type Name
-    if req.TypeName != t.TypeName { // // TAMBAH: Bandingkan nama
-        changes = append(changes, fmt.Sprintf("Type Name: '%s' → '%s'", t.TypeName, req.TypeName)) // // TAMBAH: Masukkan ke list perubahan
-    }
+	if req.TypeName != t.TypeName { // // TAMBAH: Bandingkan nama
+		changes = append(changes, fmt.Sprintf("Type Name: '%s' → '%s'", t.TypeName, req.TypeName)) // // TAMBAH: Masukkan ke list perubahan
+	}
 
-    
-    if req.TypeDesc != t.TypeDesc { 
-        changes = append(changes, fmt.Sprintf("Description: '%s' → '%s'", t.TypeDesc, req.TypeDesc)) // // TAMBAH: Masukkan ke list perubahan
-    }
+	if req.TypeDesc != t.TypeDesc {
+		changes = append(changes, fmt.Sprintf("Description: '%s' → '%s'", t.TypeDesc, req.TypeDesc)) // // TAMBAH: Masukkan ke list perubahan
+	}
 
 	// if helper.UpperAndTrim(req.TypeCode) != helper.UpperAndTrim(t.TypeCode) {
 	// 	existing, _ := s.repository.GetTypeByTypeCode(helper.UpperAndTrim(req.TypeCode))
@@ -165,12 +162,12 @@ func (s *typeService) UpdateType(typeID string, req *dto.TypeRequest, userID str
 		return nil, &errorhandler.InternalServerError{Message: err.Error()}
 	}
 
-        var note string 
-        if len(changes) > 0 { 
-            note = fmt.Sprintf("Mengubah tipe %s: %s", t.TypeName, strings.Join(changes, "; ")) // // UBAH: Gabungkan detail perubahan
-        } else {
-            note = fmt.Sprintf("Mengubah tipe %s (tidak ada perubahan data)", t.TypeName) // // TAMBAH: Jika user klik simpan tanpa edit apapun
-        }
+	var note string
+	if len(changes) > 0 {
+		note = fmt.Sprintf("Mengubah tipe %s: %s", t.TypeName, strings.Join(changes, "; ")) // // UBAH: Gabungkan detail perubahan
+	} else {
+		note = fmt.Sprintf("Mengubah tipe %s (tidak ada perubahan data)", t.TypeName) // // TAMBAH: Jika user klik simpan tanpa edit apapun
+	}
 
 	s.logRepository.Create(&entity.Log{
 		LogID:         uuid.New().String(),
@@ -197,7 +194,7 @@ func (s *typeService) UpdateType(typeID string, req *dto.TypeRequest, userID str
 }
 
 func (s *typeService) DeleteType(typeID string, userID string) error {
-	t, err := s.repository.GetTypeByID(typeID)//
+	t, err := s.repository.GetTypeByID(typeID) //
 
 	if err != nil {
 		return &errorhandler.NotFoundError{Message: "type not found"}

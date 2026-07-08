@@ -24,10 +24,11 @@ func UserAddressRouter(api *gin.RouterGroup) {
 	UserAddress.Use(middleware.JWTMiddleware())
 
 	rlWrite := middleware.NewRateLimiter(20, time.Minute)
+	rlCourierDaily := middleware.NewDailyRateLimiter(config.RedisClient, 50)
 	rlRead := middleware.NewRateLimiter(60, time.Minute)
 
-	UserAddress.POST("", rlWrite.Middleware(), UserAddressHandler.Create)
-	UserAddress.PUT("/:id", rlWrite.Middleware(), UserAddressHandler.Update)
+	UserAddress.POST("", rlWrite.Middleware(), rlCourierDaily.Middleware(), UserAddressHandler.Create)
+	UserAddress.PUT("/:id", rlWrite.Middleware(), rlCourierDaily.Middleware(), UserAddressHandler.Update)
 	UserAddress.GET("/:id", rlRead.Middleware(), UserAddressHandler.GetMyAddresses)
 	UserAddress.DELETE("/:id", rlWrite.Middleware(), UserAddressHandler.Delete)
 }

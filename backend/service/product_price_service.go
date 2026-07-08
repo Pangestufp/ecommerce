@@ -6,7 +6,8 @@ import (
 	"backend/errorhandler"
 	"backend/helper"
 	"backend/repository"
-	"backend/server"
+	"backend/worker"
+
 	"context"
 	"fmt"
 
@@ -51,9 +52,9 @@ func (s *productPriceService) Create(req *dto.CreateProductPriceRequest, userID 
 	if err != nil {
 		return nil, &errorhandler.NotFoundError{Message: "Product Not Found"}
 	}
-	
+
 	//perubahan fabio
-currentPrice, err := s.repository.GetLatestByProductID(req.ProductID)
+	currentPrice, err := s.repository.GetLatestByProductID(req.ProductID)
 	if err == nil && currentPrice != nil {
 		if decimal.NewFromFloat(req.ProductPrice).Equal(currentPrice.ProductPrice) {
 			return nil, &errorhandler.BadRequestError{
@@ -112,7 +113,7 @@ currentPrice, err := s.repository.GetLatestByProductID(req.ProductID)
 	})
 
 	go func() {
-		server.Instance.ProductEventChan <- &dto.ProductEvent{
+		worker.Instance.ProductEventChan <- &dto.ProductEvent{
 			ProductID: req.ProductID,
 			Type:      "create product price",
 		}

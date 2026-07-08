@@ -125,3 +125,78 @@ func (h *checkoutHandler) GetCourier(c *gin.Context) {
 	}))
 
 }
+
+func (h *checkoutHandler) ConfirmCheckout(c *gin.Context) {
+	var req dto.ConfirmCheckoutRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		errorhandler.ErrorHandler(c, &errorhandler.BadRequestError{Message: err.Error()})
+		return
+	}
+
+	idempotencyKey := c.GetHeader("Idempotency-Key")
+	if idempotencyKey == "" {
+		errorhandler.ErrorHandler(c, &errorhandler.BadRequestError{
+			Message: "Header Idempotency-Key wajib diisi",
+		})
+		return
+	}
+
+	val, ok := c.Get("userID")
+	if !ok {
+		errorhandler.ErrorHandler(c, &errorhandler.UnauthorizedError{Message: "unauthorized"})
+		return
+	}
+	userID, ok := val.(string)
+
+	if !ok {
+		errorhandler.ErrorHandler(c, &errorhandler.InternalServerError{Message: "invalid user id"})
+		return
+	}
+
+	data, err := h.service.ConfirmCheckout(&req, userID, idempotencyKey)
+	if err != nil {
+		errorhandler.ErrorHandler(c, err)
+		return
+	}
+
+	// 202 Accepted: request diterima tapi belum selesai diproses
+	c.JSON(http.StatusAccepted, helper.BuildResponse(dto.ResponseParam{
+		StatusCode: http.StatusAccepted,
+		Message:    "Checkout diterima, silakan polling status",
+		Data:       data,
+	}))
+}
+
+func (h *checkoutHandler) GetCheckoutStatus(c *gin.Context) {
+	idempotencyKey := c.Param("key")
+	if idempotencyKey == "" {
+		errorhandler.ErrorHandler(c, &errorhandler.BadRequestError{
+			Message: "Idempotency key tidak valid",
+		})
+		return
+	}
+
+	val, ok := c.Get("userID")
+	if !ok {
+		errorhandler.ErrorHandler(c, &errorhandler.UnauthorizedError{Message: "unauthorized"})
+		return
+	}
+	userID, ok := val.(string)
+
+	if !ok {
+		errorhandler.ErrorHandler(c, &errorhandler.InternalServerError{Message: "invalid user id"})
+		return
+	}
+
+	data, err := h.service.GetCheckoutStatus(idempotencyKey, userID)
+	if err != nil {
+		errorhandler.ErrorHandler(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, helper.BuildResponse(dto.ResponseParam{
+		StatusCode: http.StatusOK,
+		Message:    "Success",
+		Data:       data,
+	}))
+}

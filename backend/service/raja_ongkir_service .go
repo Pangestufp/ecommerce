@@ -374,7 +374,7 @@ func (s *rajaOngkirService) CalculateShippingCost(req *dto.ShippingCostRequest) 
 	}
 
 	encoded, _ := json.Marshal(result)
-	s.redis.Set(ctx, cacheKey, encoded, 2*time.Minute)
+	s.redis.Set(ctx, cacheKey, encoded, 10*time.Minute)
 
 	return result, nil
 }

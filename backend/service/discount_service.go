@@ -6,7 +6,7 @@ import (
 	"backend/errorhandler"
 	"backend/helper"
 	"backend/repository"
-	"backend/server"
+	"backend/worker"
 	"context"
 	"fmt"
 	"time"
@@ -120,7 +120,7 @@ func (s *discountService) Create(req *dto.CreateDiscountRequest, userID string) 
 
 	go func() {
 
-		server.Instance.ProductEventChan <- &dto.ProductEvent{
+		worker.Instance.ProductEventChan <- &dto.ProductEvent{
 			ProductID: req.ProductID,
 			Type:      "create discount",
 		}
@@ -211,7 +211,7 @@ func (s *discountService) Delete(discountID string, userID string) error {
 	s.redis.Del(ctx, cacheKey)
 
 	go func() {
-		server.Instance.ProductEventChan <- &dto.ProductEvent{
+		worker.Instance.ProductEventChan <- &dto.ProductEvent{
 			ProductID: discount.ProductID,
 			Type:      "delete discount",
 		}

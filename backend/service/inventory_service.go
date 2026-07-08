@@ -6,7 +6,7 @@ import (
 	"backend/errorhandler"
 	"backend/helper"
 	"backend/repository"
-	"backend/server"
+	"backend/worker"
 	"context"
 	"fmt"
 
@@ -99,7 +99,7 @@ func (s *inventoryService) Create(req *dto.CreateInventoryRequest, userID string
 	})
 
 	go func() {
-		server.Instance.ProductEventChan <- &dto.ProductEvent{
+		worker.Instance.ProductEventChan <- &dto.ProductEvent{
 			ProductID: req.ProductID,
 			Type:      "Create batch",
 		}
@@ -173,7 +173,7 @@ func (s *inventoryService) Update(batchID string, req *dto.UpdateInventoryReques
 	})
 
 	go func() {
-		server.Instance.ProductEventChan <- &dto.ProductEvent{
+		worker.Instance.ProductEventChan <- &dto.ProductEvent{
 			ProductID: inv.ProductID,
 			Type:      "Update batch",
 		}

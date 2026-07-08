@@ -4,7 +4,7 @@ import (
 	"backend/config"
 	"backend/middleware"
 	"backend/router"
-	"backend/server"
+	"backend/worker"
 	"fmt"
 	"log"
 	"net/http"
@@ -44,8 +44,10 @@ func main() {
 	router.CourierRouter(api)
 	router.CheckoutRouter(api)
 	router.TransactionRouter(api)
+	router.SalesOrderRouter(api)
 
-	server.Initialize(config.DB)
+	worker.Initialize(config.DB)
+	worker.InitializeCheckout(config.DB)
 
 	srv := &http.Server{
 		Addr:              fmt.Sprintf(":%v", config.ENV.Port),

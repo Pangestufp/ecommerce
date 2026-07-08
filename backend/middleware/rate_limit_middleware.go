@@ -51,7 +51,7 @@ func (rl *RateLimiter) Middleware() gin.HandlerFunc {
 
 		if exists {
 			if id, ok := userID.(string); ok {
-				key = "user:" + id
+				key = c.FullPath() + ":user:" + id
 			}
 		}
 

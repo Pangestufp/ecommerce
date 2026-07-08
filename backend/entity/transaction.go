@@ -1,6 +1,10 @@
 package entity
 
-import "time"
+import (
+	"time"
+
+	"github.com/shopspring/decimal"
+)
 
 type Transaction struct {
 	TransactionID string `gorm:"primaryKey"`
@@ -10,5 +14,7 @@ type Transaction struct {
 	ReferenceType string
 	ReferenceID   string
 	Note          string
+	Cost          *decimal.Decimal
+	TotalCost     *decimal.Decimal
 	CreatedAt     time.Time
 }
