@@ -2,6 +2,7 @@ package handler
 
 import (
 	"backend/dto"
+	"backend/errorhandler"
 	"backend/helper"
 	"backend/service"
 	"net/http"
@@ -22,12 +23,13 @@ func NewSalesOrderHandler(service service.SalesOrderService) *SalesOrderHandler 
 func (h *SalesOrderHandler) GetAll(c *gin.Context) {
 	limit, statuses, cursor, ok := parseListParams(c)
 	if !ok {
+		errorhandler.ErrorHandler(c, &errorhandler.BadRequestError{Message: "Parameter tidak valid"})
 		return
 	}
 
 	orders, paginate, err := h.service.GetAllPaginate(cursor, statuses, limit)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		errorhandler.ErrorHandler(c, err)
 		return
 	}
 
@@ -38,20 +40,31 @@ func (h *SalesOrderHandler) GetAll(c *gin.Context) {
 }
 
 func (h *SalesOrderHandler) GetMyOrders(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "user tidak terautentikasi"})
+	userIDVal, ok := c.Get("userID")
+	if !ok {
+		errorhandler.ErrorHandler(c, &errorhandler.UnauthorizedError{
+			Message: "unauthorized",
+		})
+		return
+	}
+	userID, ok := userIDVal.(string)
+
+	if !ok {
+		errorhandler.ErrorHandler(c, &errorhandler.InternalServerError{
+			Message: "invalid user id",
+		})
 		return
 	}
 
 	limit, statuses, cursor, ok := parseListParams(c)
 	if !ok {
+		errorhandler.ErrorHandler(c, &errorhandler.BadRequestError{Message: "Parameter tidak valid"})
 		return
 	}
 
-	orders, paginate, err := h.service.GetAllByUserPaginate(cursor, userID.(string), statuses, limit)
+	orders, paginate, err := h.service.GetAllByUserPaginate(cursor, userID, statuses, limit)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		errorhandler.ErrorHandler(c, err)
 		return
 	}
 
@@ -64,13 +77,13 @@ func (h *SalesOrderHandler) GetMyOrders(c *gin.Context) {
 func (h *SalesOrderHandler) GetByCode(c *gin.Context) {
 	code := c.Param("code")
 	if code == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "sales order code diperlukan"})
+		errorhandler.ErrorHandler(c, &errorhandler.BadRequestError{Message: "code tidak valid"})
 		return
 	}
 
 	result, err := h.service.GetByCode(code)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		errorhandler.ErrorHandler(c, err)
 		return
 	}
 
@@ -88,7 +101,7 @@ func parseListParams(c *gin.Context) (limit int, statuses []string, cursor *dto.
 	statuses = c.QueryArray("statuses")
 	if len(statuses) > 0 {
 		if err := helper.ValidateStatuses(statuses); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			errorhandler.ErrorHandler(c, err)
 			return 0, nil, nil, false
 		}
 	}

@@ -3,6 +3,7 @@ package router
 import (
 	"backend/config"
 	"backend/handler"
+	"backend/helper"
 	"backend/middleware"
 	"backend/repository"
 	"backend/service"
@@ -26,8 +27,8 @@ func SalesOrderRouter(api *gin.RouterGroup) {
 
 	rlRead := middleware.NewRateLimiter(60, time.Minute)
 
-	adminSalesOrder.GET("", rlRead.Middleware(), salesOrderHandler.GetAll)
-	adminSalesOrder.GET("/:code", rlRead.Middleware(), salesOrderHandler.GetByCode)
+	adminSalesOrder.GET("", rlRead.Middleware(), middleware.RoleMiddleware([]string{helper.Admin()}), salesOrderHandler.GetAll)
+	adminSalesOrder.GET("/:code", rlRead.Middleware(), middleware.RoleMiddleware([]string{helper.Admin()}), salesOrderHandler.GetByCode)
 	userSalesOrder.GET("", rlRead.Middleware(), salesOrderHandler.GetMyOrders)
 	userSalesOrder.GET("/:code", rlRead.Middleware(), salesOrderHandler.GetByCode)
 }
