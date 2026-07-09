@@ -62,6 +62,8 @@ class Endpoints {
   static CHECKOUT = {
     CREATE: "/api/checkout",
     DETAIL: (id) => `/api/checkout/${id}`,
+    CONFIRM: `/api/checkout/confirm`,
+    STATUS: (id) => `/api/checkout/status/${id}`,
   }
 
   static COURIER = {
@@ -71,6 +73,34 @@ class Endpoints {
   static TRANSACTION = {
     GET_BY_BATCH_ID: (batchID, id, direction, createdAt) => 
         `/api/transaction/batch/${batchID}?id=${id}&direction=${direction}&created_at=${createdAt}`,
+};
+
+  static SALESORDER_ADMIN = {
+  GET_ALL_PAGINATE: (lastId, lastCreatedAt, direction, statuses) => {
+    const base = `/api/admin/sales-orders?last_id=${lastId}&last_created_at=${lastCreatedAt}&direction=${direction}`;
+    if (!statuses || statuses.length === 0) return base;
+    return base + "&" + statuses.map((s) => `statuses=${s}`).join("&");
+  },
+  GET_ALL_PAGINATE_PREV: (firstId, firstCreatedAt, statuses) => {
+    const base = `/api/admin/sales-orders?first_id=${firstId}&first_created_at=${firstCreatedAt}&direction=prev`;
+    if (!statuses || statuses.length === 0) return base;
+    return base + "&" + statuses.map((s) => `statuses=${s}`).join("&");
+  },
+  GET_BY_CODE: (code) => `/api/admin/sales-orders/${code}`,
+};
+ 
+static SALESORDER_USER = {
+  GET_ALL_PAGINATE: (lastId, lastCreatedAt, direction, statuses) => {
+    const base = `/api/user/sales-orders?last_id=${lastId}&last_created_at=${lastCreatedAt}&direction=${direction}`;
+    if (!statuses || statuses.length === 0) return base;
+    return base + "&" + statuses.map((s) => `statuses=${s}`).join("&");
+  },
+  GET_ALL_PAGINATE_PREV: (firstId, firstCreatedAt, statuses) => {
+    const base = `/api/user/sales-orders?first_id=${firstId}&first_created_at=${firstCreatedAt}&direction=prev`;
+    if (!statuses || statuses.length === 0) return base;
+    return base + "&" + statuses.map((s) => `statuses=${s}`).join("&");
+  },
+  GET_BY_CODE: (code) => `/api/user/sales-orders/${code}`,
 };
 
 }

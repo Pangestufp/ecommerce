@@ -1,8 +1,3 @@
-/**
- * Format angka ke format Rupiah
- * @param {string|number} n
- * @returns {string} e.g. "Rp 1.300.000"
- */
 export function formatRupiah(n) {
   return new Intl.NumberFormat("id-ID", {
     style: "currency",
@@ -11,11 +6,6 @@ export function formatRupiah(n) {
   }).format(parseFloat(n));
 }
 
-/**
- * Pilih diskon dengan harga akhir (final_amount) paling murah
- * @param {Array} discounts
- * @returns {object|null}
- */
 export function getBestDiscount(discounts) {
   if (!discounts || discounts.length === 0) return null;
   return discounts.reduce((best, d) =>
@@ -23,12 +13,19 @@ export function getBestDiscount(discounts) {
   );
 }
 
-/**
- * Hitung harga satuan produk setelah diskon
- * @param {object} item  - product_price item dari API
- * @param {object|null} selectedDiscount
- * @returns {number}
- */
+export function generateIdempotencyKey() {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+
+  // fallback kalau browser lama / crypto.randomUUID gak ada
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 export function getUnitPrice(item, selectedDiscount) {
   if (selectedDiscount) return parseFloat(selectedDiscount.final_amount);
   return parseFloat(item.product_price);

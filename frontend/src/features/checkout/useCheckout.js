@@ -2,9 +2,18 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import ApiCheckout from "./apiCheckout";
-import { getBestDiscount, getUnitPrice } from "./checkoutHelpers";
+import { generateIdempotencyKey, getBestDiscount, getUnitPrice } from "./checkoutHelpers";
+import { useModal } from "../../shared/modal/ModalContext";
 
 export function useCheckout() {
+
+    const {
+      confirm: modalConfirm,
+      success: modalSuccess,
+      error: modalError,
+      loading: modalLoading,
+    } = useModal();
+
   const { id } = useParams();
   const navigate = useNavigate();
 
@@ -20,6 +29,8 @@ export function useCheckout() {
   const [loadingCourier, setLoadingCourier] = useState(false);
 
   const [note, setNote] = useState("");
+
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     const fetchCheckout = async () => {
@@ -106,7 +117,9 @@ export function useCheckout() {
     return subtotal + (selectedCourier?.cost ?? 0);
   }, [subtotal, selectedCourier]);
 
-  const handleOrder = () => {
+  const handleOrder = async () => {
+    if (submitting) return;
+
     const payload = {
       checkout_id: id,
       address_id: selectedAddressId,
@@ -131,7 +144,20 @@ export function useCheckout() {
       total: grandTotal,
     };
 
-    console.log(payload);
+    const idempotencyKey = generateIdempotencyKey();
+    const closeLoading = modalLoading("Create...");
+    try {
+      setSubmitting(true);
+      await ApiCheckout.confirmCheckout(payload, idempotencyKey);
+      await modalSuccess("Silahkan menunggu pesanan anda");
+      navigate(`/checkout/await/${idempotencyKey}`);
+    } catch (err) {
+      console.error(err.message);
+      await modalError(err.message || "Terjadi kesalahan");
+    } finally {
+      setSubmitting(false);
+      closeLoading();
+    }
   };
 
   return {
@@ -161,5 +187,6 @@ export function useCheckout() {
 
     handleDiscount,
     handleOrder,
+    submitting,
   };
 }

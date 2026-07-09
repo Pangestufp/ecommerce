@@ -24,6 +24,11 @@ const processQueue = (error, token = null) => {
 
 api.interceptors.request.use(
   async (config) => {
+
+    if (config.idempotencyKey) {
+      config.headers["Idempotency-Key"] = config.idempotencyKey
+    }
+
     if (config.url?.includes(Endpoints.AUTH.REFRESH)) {
       return config
     }
@@ -72,6 +77,7 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (!error.response) {
+        console.log(error)
       return Promise.reject(new Error("Tidak dapat terhubung ke server"))
     }
 

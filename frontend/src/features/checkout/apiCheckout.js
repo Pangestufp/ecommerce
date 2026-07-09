@@ -18,6 +18,24 @@ const ApiCheckout = {
 
     return res;
   },
+
+  confirmCheckout: async (payload, idempotencyKey) => {
+    const res = await api.post(
+      Endpoints.CHECKOUT.CONFIRM,
+      payload,
+      { idempotencyKey }
+    );
+
+    return res;
+  },
+
+  getCheckoutStatus: async (idempotencyKey) => {
+    const res = await api.get(
+      Endpoints.CHECKOUT.STATUS(idempotencyKey)
+    );
+
+    return res;
+  },
 };
 
 export default ApiCheckout;
