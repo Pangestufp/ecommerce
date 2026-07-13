@@ -23,6 +23,7 @@ type SalesOrderRepository interface {
 	GetAllPaginate(cursor *dto.Paginate, statuses []string, limit int) ([]entity.SalesOrder, error)
 	GetAllByUserPaginate(cursor *dto.Paginate, userID string, statuses []string, limit int) ([]entity.SalesOrder, error)
 	GetByCode(salesOrderCode string) (*entity.SalesOrder, []entity.SalesOrderDetail, error)
+	UpdateStatus(tx *gorm.DB, salesOrderID string, updates map[string]interface{}) error
 }
 
 type salesOrderRepository struct {
@@ -249,4 +250,17 @@ func reverseSalesOrderIfPrev(orders []entity.SalesOrder, cursor *dto.Paginate) [
 		}
 	}
 	return orders
+}
+
+func (r *salesOrderRepository) UpdateStatus(tx *gorm.DB, salesOrderID string, updates map[string]interface{}) error {
+	result := tx.Model(&entity.SalesOrder{}).
+		Where("sales_order_id = ?", salesOrderID).
+		Updates(updates)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return &errorhandler.NotFoundError{Message: "Sales order tidak ditemukan"}
+	}
+	return nil
 }

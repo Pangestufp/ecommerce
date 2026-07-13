@@ -69,6 +69,7 @@ type ConfirmCheckoutRequest struct {
 	CourierService      string                       `json:"courier_service"`
 	CourierName         string                       `json:"courier_name"`
 	ShippingCost        decimal.Decimal              `json:"shipping_cost"`
+	Subtotal            decimal.Decimal              `json:"subtotal"`
 	Note                string                       `json:"note"`
 	Items               []ConfirmCheckoutItemRequest `json:"items"`
 	ShippingETD         string                       `json:"-"`

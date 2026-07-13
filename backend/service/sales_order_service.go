@@ -6,26 +6,38 @@ import (
 	"backend/errorhandler"
 	"backend/helper"
 	"backend/repository"
+	"context"
+	"log"
+	"time"
+
+	"github.com/minio/minio-go/v7"
 )
 
 type SalesOrderService interface {
 	GetAllPaginate(cursor *dto.Paginate, statuses []string, limit int) ([]dto.SalesOrderResponse, *dto.Paginate, error)
 	GetAllByUserPaginate(cursor *dto.Paginate, userID string, statuses []string, limit int) ([]dto.SalesOrderResponse, *dto.Paginate, error)
-	GetByCode(salesOrderCode string) (*dto.SalesOrderDetailResponse, error)
+	GetByCodeAdmin(salesOrderCode string) (*dto.SalesOrderDetailResponse, error)
+	GetByCodeUser(salesOrderCode, userID string) (*dto.SalesOrderDetailResponse, error)
 }
 
 type salesOrderService struct {
 	repository        repository.SalesOrderRepository
 	historyRepository repository.OrderStatusHistoryRepository
+	minio             *minio.Client
+	bucket            string
 }
 
 func NewSalesOrderService(
 	repository repository.SalesOrderRepository,
 	historyRepository repository.OrderStatusHistoryRepository,
-) SalesOrderService {
+	minio *minio.Client,
+	bucket string,
+) *salesOrderService {
 	return &salesOrderService{
 		repository:        repository,
 		historyRepository: historyRepository,
+		minio:             minio,
+		bucket:            bucket,
 	}
 }
 
@@ -47,7 +59,54 @@ func (s *salesOrderService) GetAllByUserPaginate(cursor *dto.Paginate, userID st
 	return buildPaginateResponse(orders, cursor, limit)
 }
 
-func (s *salesOrderService) GetByCode(salesOrderCode string) (*dto.SalesOrderDetailResponse, error) {
+func (s *salesOrderService) GetByCodeUser(salesOrderCode, userID string) (*dto.SalesOrderDetailResponse, error) {
+	order, details, err := s.repository.GetByCode(salesOrderCode)
+	if err != nil {
+		return nil, err
+	}
+
+	if userID != order.UserID {
+		return nil, &errorhandler.ForbiddenError{Message: "Anda tidak boleh mengakses pesanan ini"}
+	}
+
+	histories, err := s.historyRepository.FindBySalesOrderID(order.SalesOrderID)
+	if err != nil {
+		return nil, &errorhandler.InternalServerError{Message: "Gagal mengambil riwayat status"}
+	}
+
+	actions, err := helper.GetAvailableActionsForCustomer(order.Status)
+	if err != nil {
+		actions = []string{}
+	}
+
+	detailResponses := make([]dto.SalesOrderItemResponse, 0, len(details))
+	for _, d := range details {
+		detailResponses = append(detailResponses, mapDetailToResponse(d, s.minio, s.bucket))
+	}
+
+	historyResponses := make([]dto.OrderStatusHistoryResponse, 0, len(histories))
+	for _, h := range histories {
+		historyResponses = append(historyResponses, dto.OrderStatusHistoryResponse{
+			HistoryID:      h.HistoryID,
+			SalesOrderID:   h.SalesOrderID,
+			PreviousStatus: h.PreviousStatus,
+			Status:         h.Status,
+			Note:           h.Note,
+			CreatedBy:      h.CreatedBy,
+			CreatedName:    h.CreatedName,
+			CreatedAt:      h.CreatedAt,
+		})
+	}
+
+	return &dto.SalesOrderDetailResponse{
+		SalesOrder: mapSalesOrderToResponse(*order),
+		Details:    detailResponses,
+		Histories:  historyResponses,
+		Actions:    actions,
+	}, nil
+}
+
+func (s *salesOrderService) GetByCodeAdmin(salesOrderCode string) (*dto.SalesOrderDetailResponse, error) {
 	order, details, err := s.repository.GetByCode(salesOrderCode)
 	if err != nil {
 		return nil, err
@@ -58,14 +117,14 @@ func (s *salesOrderService) GetByCode(salesOrderCode string) (*dto.SalesOrderDet
 		return nil, &errorhandler.InternalServerError{Message: "Gagal mengambil riwayat status"}
 	}
 
-	actions, err := helper.GetAvailableActions(order.Status)
+	actions, err := helper.GetAvailableActionsForAdmin(order.Status)
 	if err != nil {
 		actions = []string{}
 	}
 
 	detailResponses := make([]dto.SalesOrderItemResponse, 0, len(details))
 	for _, d := range details {
-		detailResponses = append(detailResponses, mapDetailToResponse(d))
+		detailResponses = append(detailResponses, mapDetailToResponse(d, s.minio, s.bucket))
 	}
 
 	historyResponses := make([]dto.OrderStatusHistoryResponse, 0, len(histories))
@@ -195,7 +254,22 @@ func mapSalesOrderToResponse(o entity.SalesOrder) dto.SalesOrderResponse {
 	}
 }
 
-func mapDetailToResponse(d entity.SalesOrderDetail) dto.SalesOrderItemResponse {
+func mapDetailToResponse(d entity.SalesOrderDetail, minio *minio.Client, bucket string) dto.SalesOrderItemResponse {
+	ctx := context.Background()
+	url, err := minio.PresignedGetObject(
+		ctx,
+		bucket,
+		d.ImageURL,
+		time.Minute*10,
+		nil,
+	)
+
+	presignedURL := url.String()
+	if err != nil {
+		log.Printf("Failed to generate presigned URL for %s: %v", d.ProductName, err)
+		presignedURL = ""
+	}
+
 	return dto.SalesOrderItemResponse{
 		DetailID:     d.DetailID,
 		SalesOrderID: d.SalesOrderID,
@@ -203,7 +277,7 @@ func mapDetailToResponse(d entity.SalesOrderDetail) dto.SalesOrderItemResponse {
 		ProductID:   d.ProductID,
 		ProductName: d.ProductName,
 		ProductCode: d.ProductCode,
-		ImageURL:    d.ImageURL,
+		ImageURL:    presignedURL,
 
 		Quantity:    d.Quantity,
 		Weight:      d.Weight,

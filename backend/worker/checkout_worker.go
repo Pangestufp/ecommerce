@@ -232,12 +232,8 @@ func (w *CheckoutWorker) execute(ctx context.Context, job CheckoutJob) (*dto.Ord
 		discountMap[d.ProductID] = append(discountMap[d.ProductID], d)
 	}
 
-	weightData, err := w.productRepo.GetWeightDataByProductIDs(productIDs)
-	if err != nil {
-		return nil, &errorhandler.InternalServerError{Message: "Gagal mengambil berat produk"}
-	}
 	weightMap := make(map[string]int)
-	for _, p := range weightData {
+	for _, p := range enriched {
 		weightMap[p.ProductID] = p.WeightGram
 	}
 
@@ -357,6 +353,14 @@ func (w *CheckoutWorker) execute(ctx context.Context, job CheckoutJob) (*dto.Ord
 	}
 
 	finalTotal := totalBeforeDiscount.Sub(totalDiscount).Add(req.ShippingCost)
+
+	subtotal := totalBeforeDiscount.Sub(totalDiscount)
+
+	if !req.Subtotal.Equal(subtotal) {
+		return nil, &errorhandler.BadRequestError{
+			Message: "Total harga berubah ditemukan",
+		}
+	}
 
 	customerAddress := fmt.Sprintf("%s, %s, %s, %s, %s %s",
 		address.AdditionalAddress, address.SubDistrictName,

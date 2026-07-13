@@ -136,3 +136,44 @@ func ValidateStatuses(statuses []string) error {
 	}
 	return nil
 }
+
+// Aksi yang boleh dilakukan customer — hanya PAY dan CONFIRM_RECEIVED.
+var customerActions = map[string]struct{}{
+	ActionPay:             {},
+	ActionConfirmReceived: {},
+}
+
+var adminExcludedActions = map[string]struct{}{
+	ActionPay:             {},
+	ActionConfirmReceived: {},
+}
+
+func GetAvailableActionsForCustomer(currentStatus string) ([]string, error) {
+	all, err := GetAvailableActions(currentStatus)
+	if err != nil {
+		return nil, err
+	}
+
+	filtered := make([]string, 0)
+	for _, action := range all {
+		if _, ok := customerActions[action]; ok {
+			filtered = append(filtered, action)
+		}
+	}
+	return filtered, nil
+}
+
+func GetAvailableActionsForAdmin(currentStatus string) ([]string, error) {
+	all, err := GetAvailableActions(currentStatus)
+	if err != nil {
+		return nil, err
+	}
+
+	filtered := make([]string, 0)
+	for _, action := range all {
+		if _, ok := adminExcludedActions[action]; !ok {
+			filtered = append(filtered, action)
+		}
+	}
+	return filtered, nil
+}

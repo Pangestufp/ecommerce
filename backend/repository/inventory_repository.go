@@ -6,9 +6,11 @@ import (
 	"backend/errorhandler"
 	"backend/helper"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
 )
 
@@ -19,9 +21,7 @@ type InventoryRepository interface {
 	GetAllByProductID(productID string, cursor *dto.Paginate, search string, limit int) ([]entity.Inventory, error)
 	GetNextSeq(productID string) (int, string, error)
 	GetHighestCostByProductID(productID string) (*entity.Inventory, error)
-
-
-
+	CommitReservations(tx *gorm.DB, salesOrderID string, salesOrderCode string, now time.Time) error
 }
 
 type inventoryRepository struct {
@@ -183,11 +183,98 @@ func (r *inventoryRepository) GetNextSeq(productID string) (int, string, error) 
 }
 
 // fungsi GetHighestCostByProductID
-func (r *inventoryRepository) GetHighestCostByProductID(productID string) (*entity.Inventory, error){
+func (r *inventoryRepository) GetHighestCostByProductID(productID string) (*entity.Inventory, error) {
 	var inv entity.Inventory
-		err := r.db.Where("product_id = ? and stock > 0", productID).Order("cost_price Desc").First(&inv).Error
-		if err != nil {
-			return nil,err
-		}
+	err := r.db.Where("product_id = ? and stock > 0", productID).Order("cost_price Desc").First(&inv).Error
+	if err != nil {
+		return nil, err
+	}
 	return &inv, nil
+}
+
+func (r *inventoryRepository) CommitReservations(tx *gorm.DB, salesOrderID string, salesOrderCode string, now time.Time) error {
+	// Ambil semua reservation milik order ini
+	var reservations []entity.StockReservation
+	if err := tx.
+		Where("sales_order_id = ? AND status = ?", salesOrderID, "RESERVED").
+		Find(&reservations).Error; err != nil {
+		return err
+	}
+
+	if len(reservations) == 0 {
+		return &errorhandler.NotFoundError{Message: "Transaksi tidak valid"}
+	}
+
+	// Kumpulkan batch IDs untuk ambil cost price sekaligus
+	batchIDs := make([]string, 0, len(reservations))
+	for _, r := range reservations {
+		batchIDs = append(batchIDs, r.BatchID)
+	}
+
+	var inventories []entity.Inventory
+	if err := tx.
+		Where("batch_id IN ?", batchIDs).
+		Find(&inventories).Error; err != nil {
+		return err
+	}
+
+	// Map batch_id → inventory untuk lookup O(1)
+	inventoryMap := make(map[string]entity.Inventory, len(inventories))
+	for _, inv := range inventories {
+		inventoryMap[inv.BatchID] = inv
+	}
+
+	transactions := make([]entity.Transaction, 0, len(reservations))
+
+	for _, res := range reservations {
+		inv, ok := inventoryMap[res.BatchID]
+		if !ok {
+			return fmt.Errorf("inventory batch %s tidak ditemukan", res.BatchID)
+		}
+
+		// Kurangi stock dan reserved_stock secara atomik
+		if err := tx.Model(&entity.Inventory{}).
+			Where("batch_id = ?", res.BatchID).
+			Updates(map[string]interface{}{
+				"stock":          gorm.Expr("stock - ?", res.Quantity),
+				"reserved_stock": gorm.Expr("reserved_stock - ?", res.Quantity),
+				"updated_at":     now,
+			}).Error; err != nil {
+			return err
+		}
+
+		// Hitung cost
+		qty := decimal.NewFromInt(int64(res.Quantity))
+		totalCost := inv.CostPrice.Mul(qty)
+
+		transactions = append(transactions, entity.Transaction{
+			TransactionID: uuid.NewString(),
+			BatchID:       res.BatchID,
+			Type:          "Out",
+			Quantity:      res.Quantity,
+			ReferenceType: "Sales-Order",
+			ReferenceID:   salesOrderID,
+			Note:          fmt.Sprintf("Penjualan order %s", salesOrderCode),
+			Cost:          &inv.CostPrice,
+			TotalCost:     &totalCost,
+			CreatedAt:     now,
+		})
+	}
+
+	// Bulk insert transactions
+	if err := tx.Create(&transactions).Error; err != nil {
+		return err
+	}
+
+	// Update semua reservation jadi COMMITTED
+	if err := tx.Model(&entity.StockReservation{}).
+		Where("sales_order_id = ? AND status = ?", salesOrderID, "RESERVED").
+		Updates(map[string]interface{}{
+			"status":     "COMMITTED",
+			"updated_at": now,
+		}).Error; err != nil {
+		return err
+	}
+
+	return nil
 }

@@ -74,14 +74,41 @@ func (h *SalesOrderHandler) GetMyOrders(c *gin.Context) {
 	})
 }
 
-func (h *SalesOrderHandler) GetByCode(c *gin.Context) {
+func (h *SalesOrderHandler) GetByCodeAdmin(c *gin.Context) {
 	code := c.Param("code")
 	if code == "" {
 		errorhandler.ErrorHandler(c, &errorhandler.BadRequestError{Message: "code tidak valid"})
 		return
 	}
 
-	result, err := h.service.GetByCode(code)
+	result, err := h.service.GetByCodeAdmin(code)
+	if err != nil {
+		errorhandler.ErrorHandler(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": result})
+}
+
+func (h *SalesOrderHandler) GetByCodeUser(c *gin.Context) {
+	code := c.Param("code")
+	if code == "" {
+		errorhandler.ErrorHandler(c, &errorhandler.BadRequestError{Message: "code tidak valid"})
+		return
+	}
+
+	val, ok := c.Get("userID")
+	if !ok {
+		errorhandler.ErrorHandler(c, &errorhandler.UnauthorizedError{Message: "unauthorized"})
+		return
+	}
+	userID, ok := val.(string)
+	if !ok {
+		errorhandler.ErrorHandler(c, &errorhandler.InternalServerError{Message: "invalid user id"})
+		return
+	}
+
+	result, err := h.service.GetByCodeUser(code, userID)
 	if err != nil {
 		errorhandler.ErrorHandler(c, err)
 		return
@@ -91,7 +118,7 @@ func (h *SalesOrderHandler) GetByCode(c *gin.Context) {
 }
 
 func parseListParams(c *gin.Context) (limit int, statuses []string, cursor *dto.Paginate, ok bool) {
-	limit = 10
+	limit = 5
 	if l := c.Query("limit"); l != "" {
 		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 {
 			limit = parsed

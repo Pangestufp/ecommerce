@@ -45,6 +45,7 @@ func main() {
 	router.CheckoutRouter(api)
 	router.TransactionRouter(api)
 	router.SalesOrderRouter(api)
+	router.PaymentRouter(api)
 
 	worker.Initialize(config.DB)
 	worker.InitializeCheckout(config.DB)

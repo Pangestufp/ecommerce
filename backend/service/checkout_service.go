@@ -588,17 +588,33 @@ func (s *checkoutService) ConfirmCheckout(req *dto.ConfirmCheckoutRequest, userI
 		}
 	}
 
-	// Tandai QUEUED sebelum enqueue supaya retry yang datang sebelum worker
-	// sempat mengambil job tidak akan enqueue ulang.
 	queued := dto.CheckoutStatusResponse{
 		IdempotencyKey: idempotencyKey,
 		Status:         "QUEUED",
 	}
-	if encoded, err := json.Marshal(queued); err == nil {
-		// TTL 0 = tidak expired, akan di-overwrite worker saat selesai
-		if err := s.redis.Set(ctx, statusKey, string(encoded), 0).Err(); err != nil {
-			log.Printf("[ConfirmCheckout] gagal set QUEUED ke Redis: %v", err)
+
+	encoded, marshalErr := json.Marshal(queued)
+
+	if marshalErr != nil {
+		return nil, &errorhandler.InternalServerError{Message: "Gagal memproses request"}
+	}
+
+	acquired, redisErr := s.redis.SetNX(ctx, statusKey, string(encoded), 24*time.Hour).Result()
+	if redisErr != nil {
+		return nil, &errorhandler.InternalServerError{Message: "Gagal memvalidasi idempotency key"}
+	}
+	if !acquired {
+		// Key sudah diklaim request lain — baca dan kembalikan status aktual
+		if cached, err := s.redis.Get(ctx, statusKey).Result(); err == nil {
+			var existing dto.CheckoutStatusResponse
+			if json.Unmarshal([]byte(cached), &existing) == nil {
+				return &dto.ConfirmCheckoutResponse{
+					IdempotencyKey: idempotencyKey,
+					Status:         existing.Status,
+				}, nil
+			}
 		}
+		return nil, &errorhandler.BadRequestError{Message: "Request dengan Idempotency-Key ini sedang diproses"}
 	}
 
 	job := worker.CheckoutJob{
@@ -607,9 +623,7 @@ func (s *checkoutService) ConfirmCheckout(req *dto.ConfirmCheckoutRequest, userI
 		IdempotencyKey: idempotencyKey,
 	}
 
-	// worker.Instance adalah singleton yang sudah di-Initialize() sekali di main.
 	if err := worker.InstanceCheckOut.Enqueue(job); err != nil {
-		// Rollback status QUEUED supaya client bisa coba lagi dengan key yang sama
 		s.redis.Del(ctx, statusKey)
 		return nil, err
 	}
@@ -652,7 +666,7 @@ func (s *checkoutService) GetCheckoutStatus(idempotencyKey string, userID string
 		if json.Unmarshal([]byte(record.ResponseBody), &resp) == nil {
 			// Re-cache ke Redis supaya polling berikutnya tidak ke DB lagi
 			if encoded, err := json.Marshal(resp); err == nil {
-				s.redis.Set(ctx, statusKey, string(encoded), 0)
+				s.redis.Set(ctx, statusKey, string(encoded), 24*time.Hour)
 			}
 			return &resp, nil
 		}
