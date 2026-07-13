@@ -4,6 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import ApiCheckout from "./apiCheckout";
 import { generateIdempotencyKey, getBestDiscount, getUnitPrice } from "./checkoutHelpers";
 import { useModal } from "../../shared/modal/ModalContext";
+import { clearCart } from "../../shared/util/cartStorage";
 
 export function useCheckout() {
 
@@ -127,6 +128,7 @@ export function useCheckout() {
       courier_service: selectedCourier?.service,
       courier_name: selectedCourier?.display_name,
       shipping_cost: selectedCourier?.cost,
+      subtotal: subtotal,
       note: note.trim() || null,
       items: products.map((item) => {
         const state = productStates[item.product_id];
@@ -150,6 +152,7 @@ export function useCheckout() {
       setSubmitting(true);
       await ApiCheckout.confirmCheckout(payload, idempotencyKey);
       await modalSuccess("Silahkan menunggu pesanan anda");
+      clearCart()
       navigate(`/checkout/await/${idempotencyKey}`);
     } catch (err) {
       console.error(err.message);

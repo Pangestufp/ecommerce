@@ -103,6 +103,10 @@ static SALESORDER_USER = {
   GET_BY_CODE: (code) => `/api/user/sales-orders/${code}`,
 };
 
+static PAYMENT = {
+  CREATE_SNAP: "/api/payment",
+}
+
 }
 
 export default Endpoints;

@@ -82,13 +82,19 @@ export default function TypePage() {
         </Button>
       </div>
 
-
-        {/* log type */}
-      <Table
-        columns={columnsLog}
-        data={logTypes}
-        rowKey="log_id"
-      />
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mt-4">
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100">
+          <h2 className="text-sm font-semibold text-gray-700">Log</h2>
+        </div>
+        <div className="p-5">
+          {/* log type */}
+          <Table
+            columns={columnsLog}
+            data={logTypes}
+            rowKey="log_id"
+          />
+        </div>
+      </div>
 
       <div className="flex items-center justify-end gap-2 mt-4">
         <Button variant="secondary" onClick={prevLog} disabled={loading||!logHasPrev}>

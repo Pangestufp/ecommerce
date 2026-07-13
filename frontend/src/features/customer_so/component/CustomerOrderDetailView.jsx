@@ -1,13 +1,15 @@
-
-// Komponen view detail order — dipakai oleh admin maupun user detail page.
-
+import { useNavigate } from "react-router-dom";
 import StatusBadge from "../../../shared/ui/Statusbadge";
 
 // Tidak ada logic di sini, pure presentational.
 export default function CustomerOrderDetailView({ detail }) {
   if (!detail) return null;
 
+  const navigate = useNavigate();
   const { sales_order: order, details, histories, actions } = detail;
+
+  const hasPay = actions?.includes("PAY");
+  const hasConfirm = actions?.includes("CONFIRM_RECEIVED");
 
   return (
     <div className="space-y-6">
@@ -126,22 +128,28 @@ export default function CustomerOrderDetailView({ detail }) {
         </div>
       </div>
 
-      {/* Aksi tersedia */}
-      {actions && actions.length > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-          <p className="text-xs font-semibold text-amber-700 mb-2">Aksi Tersedia</p>
-          <div className="flex flex-wrap gap-2">
-            {actions.map((action) => (
-              <span
-                key={action}
-                className="px-3 py-1 bg-amber-100 text-amber-800 border border-amber-300 rounded-full text-xs font-medium"
-              >
-                {action}
-              </span>
-            ))}
-          </div>
+      {/* Aksi customer: PAY dan CONFIRM_RECEIVED */}
+      {(hasPay || hasConfirm) && (
+        <div className="space-y-2">
+          {hasPay && (
+            <button
+              onClick={() => navigate(`/payment/${order.sales_order_code}`)}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-3 rounded-xl transition-colors"
+            >
+              Bayar Sekarang
+            </button>
+          )}
+          {hasConfirm && (
+            <button
+              onClick={() => {/* TODO */}}
+              className="w-full bg-green-600 hover:bg-green-700 text-white text-sm font-medium py-3 rounded-xl transition-colors"
+            >
+              Konfirmasi Pesanan Diterima
+            </button>
+          )}
         </div>
       )}
+
     </div>
   );
 }
